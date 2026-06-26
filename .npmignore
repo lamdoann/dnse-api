@@ -1,0 +1,11 @@
+src/
+examples/
+test/
+node_modules/
+coverage/
+tsconfig*.json
+.editorconfig
+.prettierrc
+.eslintrc*
+*.log
+.env*

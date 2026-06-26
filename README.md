@@ -1,0 +1,304 @@
+# dnse-api
+
+> SDK Node.js & TypeScript cho **DNSE OpenAPI** — tài khoản, đặt lệnh, vị thế và dữ liệu thị trường, với ký HMAC HTTP-signature tự động.
+
+- 📚 Tài liệu DNSE: <https://developers.dnse.com.vn/docs/guide/intro/api_platform>
+- 🔐 Xác thực: API key/secret + HMAC HTTP-signature, OTP → trading token để giao dịch
+- 📡 Dữ liệu thị trường realtime qua MQTT/WebSocket (`MarketDataWsClient`)
+- 🧪 Full TypeScript, có `dryRun` để xem trước request trước khi gửi thật
+- ✅ Hỗ trợ cả CommonJS (`require`) và ESM (`import`)
+
+---
+
+## Cài đặt
+
+```bash
+npm install dnse-api
+# yêu cầu Node.js >= 18
+```
+
+## Khởi tạo client
+
+```ts
+import { RestClient } from 'dnse-api';
+
+const client = new RestClient({
+  apiKey: process.env.DNSE_API_KEY,       // tạo tại developers.dnse.com.vn
+  apiSecret: process.env.DNSE_API_SECRET, // dùng để ký HMAC, không bao giờ gửi lên server
+  // baseUrl: 'https://openapi.dnse.com.vn',  // mặc định
+  // algorithm: 'hmac-sha256',                // hmac-sha256 | hmac-sha384 | hmac-sha512
+  // hmacNonceEnabled: true,                  // thêm nonce chống replay
+  // dryRun: false,                           // true = in request thay vì gửi
+});
+```
+
+Tạo client **không cần credentials** để chỉ gọi các endpoint public (OHLC, security definition):
+
+```ts
+const publicClient = new RestClient();
+```
+
+## Dùng nhanh
+
+```ts
+// Dữ liệu thị trường (public)
+const ohlc = await client.getOhlc('STOCK', {
+  symbol: 'HPG',
+  resolution: '1',
+  from: 1735689600,
+  to: 1735776000,
+});
+
+// Tài khoản (private — tự động ký)
+const accounts = await client.getAccounts();
+const accountNo = accounts.accounts[0].accountNo;
+
+const balances = await client.getBalances(accountNo);
+const positions = await client.getPositions(accountNo, { marketType: 'STOCK' });
+```
+
+## Đặt lệnh (cần trading token)
+
+Mọi lệnh ghi (đặt/sửa/hủy/đóng vị thế) cần một **trading token** ngắn hạn, lấy từ OTP:
+
+```ts
+// 1) Gửi OTP qua email (hoặc dùng Smart OTP trên app)
+await client.sendEmailOtp({ email: 'you@example.com' });
+
+// 2) Đổi mã OTP lấy trading token
+const { tradingToken } = await client.createTradingToken({
+  otpType: 'email',
+  passcode: '123456',
+});
+
+// 3) Đặt lệnh, truyền token qua options
+const order = await client.placeOrder(
+  'STOCK',
+  {
+    accountNo: '0001000115',
+    symbol: 'HPG',
+    side: 'BUY',
+    orderType: 'LO',
+    price: 25950,
+    quantity: 100,
+    loanPackageId: 2396,
+  },
+  { tradingToken },
+);
+```
+
+## Chế độ `dryRun`
+
+Bật `dryRun` (toàn cục hoặc theo từng call) để xem chính xác request sẽ gửi — kèm header đã ký — mà **không** gọi mạng:
+
+```ts
+const preview = await client.placeOrder('STOCK', payload, {
+  tradingToken,
+  dryRun: true,
+});
+// => { dryRun: true, method, url, headers, body }
+```
+
+## Xử lý lỗi
+
+Mọi lỗi HTTP được chuẩn hóa thành `DNSEAPIError`:
+
+```ts
+import { DNSEAPIError } from 'dnse-api';
+
+try {
+  await client.getBalances('0001000115');
+} catch (err) {
+  if (err instanceof DNSEAPIError) {
+    console.error(err.status, err.body, err.request);
+  }
+}
+```
+
+---
+
+## API đã hỗ trợ
+
+### Xác thực
+| Method | Mô tả | Endpoint |
+| --- | --- | --- |
+| `sendEmailOtp(params)` | Gửi OTP qua email | `POST /registration/send-email-otp` |
+| `createTradingToken(params)` | Đổi OTP lấy trading token | `POST /registration/trading-token` |
+
+### Tài khoản
+| Method | Mô tả | Endpoint |
+| --- | --- | --- |
+| `getAccounts()` | Danh sách tiểu khoản | `GET /accounts` |
+| `getBalances(accountNo)` | Số dư tiền & tài sản | `GET /accounts/{accountNo}/balances` |
+| `getLoanPackages(accountNo, params?)` | Gói vay theo mã | `GET /accounts/{accountNo}/loan-packages` |
+| `getPpse(accountNo, params)` | Sức mua/bán | `GET /accounts/{accountNo}/ppse` |
+| `getCorporateActionHistory(accountNo, params?)` | Lịch sử sự kiện quyền | `GET /accounts/{accountNo}/corporate-action-history` |
+
+### Vị thế & lệnh (đọc)
+| Method | Mô tả | Endpoint |
+| --- | --- | --- |
+| `getPositions(accountNo, params)` | Danh mục đang nắm giữ | `GET /accounts/{accountNo}/positions` |
+| `getOrders(accountNo, marketType)` | Sổ lệnh trong ngày | `GET /accounts/{accountNo}/orders` |
+| `getOrderDetail(accountNo, orderId, params)` | Chi tiết 1 lệnh | `GET /accounts/{accountNo}/orders/{orderId}` |
+| `getExecutionDetail(accountNo, orderId, params)` | Lịch sử khớp/khớp một phần | `GET /accounts/{accountNo}/executions/{orderId}` |
+| `getOrderHistory(accountNo, params?)` | Lịch sử lệnh (tối đa 1 năm) | `GET /accounts/{accountNo}/orders/history` |
+
+### Lệnh (ghi — cần trading token)
+| Method | Mô tả | Endpoint |
+| --- | --- | --- |
+| `placeOrder(marketType, payload, opts)` | Đặt lệnh mới | `POST /accounts/orders` |
+| `amendOrder(accountNo, orderId, marketType, payload, opts)` | Sửa lệnh | `PUT /accounts/{accountNo}/orders/{orderId}` |
+| `cancelOrder(accountNo, orderId, marketType, opts)` | Hủy lệnh | `DELETE /accounts/{accountNo}/orders/{orderId}` |
+| `closePosition(accountNo, positionId, marketType, payload, opts)` | Đóng vị thế | `POST /accounts/{accountNo}/positions/{positionId}/close` |
+
+### Dữ liệu thị trường (public)
+| Method | Mô tả | Endpoint |
+| --- | --- | --- |
+| `getSecurityDefinition(symbol, params?)` | Thông tin mã (trần/sàn/lô…) | `GET /price/{symbol}/secdef` |
+| `getOhlc(market, params)` | Nến OHLC | `GET /price/ohlc` |
+
+---
+
+## Cách ký request (HMAC HTTP-signature)
+
+Mỗi request private được ký theo lược đồ draft-cavage mà DNSE dùng:
+
+```
+signing string:
+  (request-target): <method> <path?query>
+  date: <RFC-1123 date>
+  nonce: <nonce>           # nếu bật
+
+→ HMAC-SHA256(secret, signing string) → base64 → URL-encode
+```
+
+Và gắn các header:
+
+```
+Date: Fri, 26 Jun 2026 16:08:17 GMT
+x-api-key: <apiKey>
+X-Signature: keyId="<apiKey>",algorithm="hmac-sha256",headers="(request-target) date nonce",nonce="...",signature="..."
+Nonce: <nonce>
+```
+
+Toàn bộ logic này nằm trong [`src/util/node-support.ts`](src/util/node-support.ts) và [`src/util/BaseRestClient.ts`](src/util/BaseRestClient.ts).
+
+---
+
+## Dữ liệu thị trường realtime (WebSocket / MQTT)
+
+DNSE đẩy dữ liệu realtime qua **MQTT trên WebSocket bảo mật (wss)**, payload **JSON**. Phần này dùng auth **JWT** (investorId + token) của hệ LightSpeed/EntradeX — **khác** với HMAC api-key/secret của OpenAPI ở trên.
+
+> ⚠️ Các topic KRX và endpoint login lấy từ tài liệu LightSpeed (GitBook render bằng JS) nên **chưa verify được tự động**. Topic builder & path login được đánh dấu `VERIFY` trong code — đối chiếu lại với docs live nếu cần. Client luôn cho `subscribe()` topic dạng string thô nên bạn không bao giờ bị kẹt.
+
+### Lấy JWT (investorId + token)
+
+```ts
+import { EntradeAuthClient } from 'dnse-api';
+
+const auth = new EntradeAuthClient();
+const { investorId, token } = await auth.authenticate('username', 'password');
+// token (JWT) có hiệu lực ~8 giờ
+```
+
+Nếu đã có sẵn JWT, bỏ qua bước này và truyền thẳng `{ investorId, token }`.
+
+### Kết nối & subscribe
+
+```ts
+import { MarketDataWsClient, Topics } from 'dnse-api';
+
+const ws = new MarketDataWsClient({ investorId, token });
+
+ws.on('open', () => {
+  ws.subscribe([
+    Topics.stockInfo('HPG'),     // giá khớp mới nhất
+    Topics.topPrice('HPG'),      // sổ lệnh bid/ask
+    Topics.marketIndex('VNINDEX'),
+    // hoặc topic thô bất kỳ:
+    // 'plaintext/quotes/stock/SI/SSI',
+  ]);
+});
+
+ws.on('message', (msg) => {
+  console.log(msg.topic, msg.data); // data đã parse JSON
+});
+
+ws.on('reconnect', () => {});
+ws.on('error', (err) => console.error(err));
+ws.on('close', () => {});
+
+ws.connect();
+// ws.unsubscribe(Topics.topPrice('HPG'));
+// await ws.close();
+```
+
+Điểm chính:
+- Tự **reconnect** và **re-subscribe** lại toàn bộ topic sau khi mất kết nối.
+- `clientId` sinh theo format broker yêu cầu: `dnse-price-json-mqtt-ws-sub-<investorId>-<random>`.
+- Mỗi message phát ra ở event `message` (kèm `topic`, `data` đã parse, `raw`), và cả event theo đúng tên topic để lắng nghe có chủ đích.
+
+### Topic builders
+
+| Builder | Topic | Dữ liệu |
+| --- | --- | --- |
+| `Topics.stockInfo(symbol)` | `plaintext/quotes/stock/SI/{symbol}` | Giá khớp, KL, thay đổi |
+| `Topics.topPrice(symbol)` | `plaintext/quotes/stock/TP/{symbol}` | Sổ lệnh bid/ask |
+| `Topics.tick(symbol)` | `plaintext/quotes/stock/TICK/{symbol}` | Từng lệnh khớp |
+| `Topics.ohlc(symbol, resolution)` | `plaintext/quotes/stock/OHLC/{resolution}/{symbol}` | Nến realtime |
+| `Topics.marketIndex(code)` | `plaintext/quotes/index/{code}` | Chỉ số (VNINDEX, VN30…) |
+| `Topics.boardEvent(boardId?)` | `plaintext/quotes/board-event/{boardId}` | Sự kiện phiên |
+
+Broker mặc định: `wss://datafeed-lts-krx.dnse.com.vn:443/wss` (đổi qua `host/port/path`).
+
+---
+
+## Kiến trúc
+
+```
+src/
+├── index.ts                 # public exports
+├── RestClient.ts            # client REST chính, khai báo endpoint đã typed
+├── MarketDataWsClient.ts    # client realtime MQTT/WebSocket (EventEmitter)
+├── EntradeAuthClient.ts     # helper login lấy JWT (investorId + token)
+├── types/                   # request/response types theo domain
+│   ├── shared.ts            # enum: MarketType, OrderSide, OrderType...
+│   ├── client.ts            # RestClientOptions, RequestOptions, credentials
+│   ├── ws.ts                # MarketDataWsOptions, message & event types
+│   ├── account.ts · order.ts · market.ts · auth.ts
+│   └── index.ts
+└── util/
+    ├── BaseRestClient.ts    # lớp trừu tượng: ký + axios + get/post/...Private
+    ├── node-support.ts      # HMAC signing (crypto)
+    ├── topics.ts            # builder topic MQTT (SI/TP/tick/ohlc/index)
+    ├── requestUtils.ts      # serialise params, fill path params
+    ├── DNSEAPIError.ts      # lỗi chuẩn hóa
+    └── logger.ts            # logger cắm được (pluggable)
+```
+
+Muốn thêm endpoint mới: thêm 1 method vào `RestClient` gọi `getPrivate/postPrivate/...` với path tương ứng, và khai báo type ở `src/types`.
+
+## Phát triển
+
+```bash
+npm install
+npm run build      # biên dịch -> lib/
+npm test           # chạy test ký HMAC + dryRun
+npm run lint
+```
+
+## Lộ trình (roadmap)
+
+- [x] `MarketDataWsClient` — stream dữ liệu thị trường realtime qua MQTT/WebSocket
+- [ ] Đối chiếu & cố định chính xác topic KRX + endpoint login với docs live
+- [ ] Decode payload có schema (typed message cho SI/TP/tick/ohlc)
+- [ ] Tự đồng bộ lệch thời gian (clock drift) cho header `Date`
+- [ ] Theo dõi rate-limit từ response header
+
+## Miễn trừ trách nhiệm
+
+Đây là thư viện cộng đồng, **không phải sản phẩm chính thức của DNSE**. Bạn tự chịu trách nhiệm với mọi lệnh giao dịch thật. Hãy luôn test với `dryRun` trước.
+
+## License
+
+[MIT](LICENSE)

@@ -1,0 +1,61 @@
+{
+  "name": "dnse-api",
+  "version": "0.1.0",
+  "description": "Node.js & TypeScript SDK for the DNSE (Dòng Nắng Sài Gòn) OpenAPI: trading, accounts, orders & market data with HMAC HTTP-signature auth.",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "clean": "rimraf lib dist",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "jest",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "dnse",
+    "dnse-api",
+    "entrade",
+    "vietnam",
+    "stock",
+    "chung-khoan",
+    "trading",
+    "openapi",
+    "hose",
+    "hnx",
+    "derivative",
+    "market-data",
+    "api",
+    "sdk",
+    "typescript"
+  ],
+  "author": "thanhlam.fit@gmail.com",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/dnse-api.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "mqtt": "^5.15.1"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20.0.0",
+    "rimraf": "^5.0.0",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5.4.0"
+  }
+}
