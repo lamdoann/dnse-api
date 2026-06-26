@@ -282,7 +282,7 @@ Muốn thêm endpoint mới: thêm 1 method vào `RestClient` gọi `getPrivate/
 
 ```bash
 npm install
-npm run build      # biên dịch -> lib/
+npm run build      # biên dịch -> dist/
 npm test           # chạy test ký HMAC + dryRun
 npm run lint
 ```

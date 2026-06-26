@@ -2,20 +2,20 @@
   "name": "dnse-api",
   "version": "0.1.0",
   "description": "Node.js & TypeScript SDK for the DNSE (Dòng Nắng Sài Gòn) OpenAPI: trading, accounts, orders & market data with HMAC HTTP-signature auth.",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
-      "default": "./lib/index.js"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "files": [
-    "lib"
+    "dist"
   ],
   "scripts": {
     "build": "tsc --project tsconfig.json",
-    "clean": "rimraf lib dist",
+    "clean": "rimraf dist",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",
