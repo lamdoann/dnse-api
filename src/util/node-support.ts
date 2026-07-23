@@ -70,3 +70,23 @@ export function generateNonce(): string {
 export function formatDateHeader(date: Date = new Date()): string {
   return date.toUTCString();
 }
+
+/**
+ * Signature for the OpenAPI realtime WebSocket auth handshake.
+ *
+ * The signed message is `${apiKey}:${timestamp}:${nonce}` and the result is a
+ * lowercase **hex** HMAC-SHA256 (note: different encoding from the REST
+ * signature, which is base64 + URL-encoded).
+ */
+export function signWsAuth(
+  apiSecret: string,
+  apiKey: string,
+  timestamp: number | string,
+  nonce: number | string,
+): string {
+  const message = `${apiKey}:${timestamp}:${nonce}`;
+  return crypto
+    .createHmac('sha256', Buffer.from(apiSecret, 'utf8'))
+    .update(message, 'utf8')
+    .digest('hex');
+}

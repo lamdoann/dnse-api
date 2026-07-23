@@ -4,7 +4,7 @@
 
 - 📚 Tài liệu DNSE: <https://developers.dnse.com.vn/docs/guide/intro/api_platform>
 - 🔐 Xác thực: API key/secret + HMAC HTTP-signature, OTP → trading token để giao dịch
-- 📡 Dữ liệu thị trường realtime qua MQTT/WebSocket (`MarketDataWsClient`)
+- 📡 Dữ liệu thị trường realtime qua WebSocket OpenAPI (`MarketDataWsClient`, cùng key/secret)
 - 🧪 Full TypeScript, có `dryRun` để xem trước request trước khi gửi thật
 - ✅ Hỗ trợ cả CommonJS (`require`) và ESM (`import`)
 
@@ -182,71 +182,57 @@ Toàn bộ logic này nằm trong [`src/util/node-support.ts`](src/util/node-sup
 
 ---
 
-## Dữ liệu thị trường realtime (WebSocket / MQTT)
+## Dữ liệu thị trường realtime (WebSocket)
 
-DNSE đẩy dữ liệu realtime qua **MQTT trên WebSocket bảo mật (wss)**, payload **JSON**. Phần này dùng auth **JWT** (investorId + token) của hệ LightSpeed/EntradeX — **khác** với HMAC api-key/secret của OpenAPI ở trên.
-
-> ⚠️ Các topic KRX và endpoint login lấy từ tài liệu LightSpeed (GitBook render bằng JS) nên **chưa verify được tự động**. Topic builder & path login được đánh dấu `VERIFY` trong code — đối chiếu lại với docs live nếu cần. Client luôn cho `subscribe()` topic dạng string thô nên bạn không bao giờ bị kẹt.
-
-### Lấy JWT (investorId + token)
-
-```ts
-import { EntradeAuthClient } from 'dnse-api';
-
-const auth = new EntradeAuthClient();
-const { investorId, token } = await auth.authenticate('username', 'password');
-// token (JWT) có hiệu lực ~8 giờ
-```
-
-Nếu đã có sẵn JWT, bỏ qua bước này và truyền thẳng `{ investorId, token }`.
+DNSE OpenAPI có feed realtime **WebSocket thuần** tại `wss://ws-openapi.dnse.com.vn`, payload **JSON**. Xác thực bằng **handshake HMAC dùng chính `apiKey`/`apiSecret`** như REST — **không** cần login/JWT riêng.
 
 ### Kết nối & subscribe
 
 ```ts
-import { MarketDataWsClient, Topics } from 'dnse-api';
+import { MarketDataWsClient } from 'dnse-api';
 
-const ws = new MarketDataWsClient({ investorId, token });
+const ws = new MarketDataWsClient({ apiKey, apiSecret });
 
 ws.on('open', () => {
-  ws.subscribe([
-    Topics.stockInfo('HPG'),     // giá khớp mới nhất
-    Topics.topPrice('HPG'),      // sổ lệnh bid/ask
-    Topics.marketIndex('VNINDEX'),
-    // hoặc topic thô bất kỳ:
-    // 'plaintext/quotes/stock/SI/SSI',
-  ]);
+  ws.subscribeOhlc(['VN30F1M', 'SSI'], '1'); // nến 1 phút
+  ws.subscribeQuote(['VN30F1M']);            // bid/ask (top of book)
+  ws.subscribeTrade(['HPG']);                // tick khớp lệnh
+  ws.subscribeMarketIndex(['VNINDEX', 'VN30']);
 });
 
-ws.on('message', (msg) => {
-  console.log(msg.topic, msg.data); // data đã parse JSON
-});
+ws.on('ohlc', (m) => console.log(m.data));
+ws.on('quote', (m) => console.log(m.data));
+ws.on('market_index', (m) => console.log(m.data));
+// hoặc nghe tất cả:
+ws.on('message', (m) => console.log(m.type, m.data));
 
 ws.on('reconnect', () => {});
+ws.on('reconnected', () => {});
 ws.on('error', (err) => console.error(err));
 ws.on('close', () => {});
 
 ws.connect();
-// ws.unsubscribe(Topics.topPrice('HPG'));
+// ws.unsubscribe('ohlc.1.json');
 // await ws.close();
 ```
 
 Điểm chính:
-- Tự **reconnect** và **re-subscribe** lại toàn bộ topic sau khi mất kết nối.
-- `clientId` sinh theo format broker yêu cầu: `dnse-price-json-mqtt-ws-sub-<investorId>-<random>`.
-- Mỗi message phát ra ở event `message` (kèm `topic`, `data` đã parse, `raw`), và cả event theo đúng tên topic để lắng nghe có chủ đích.
+- Handshake auth: gửi `{action:"auth", api_key, signature, timestamp, nonce}`, ký `HMAC-SHA256(secret, "{apiKey}:{timestamp}:{nonce}")` (hex). Chờ `auth_success` mới subscribe.
+- Tự **reconnect** (backoff) → re-auth → **re-subscribe** lại toàn bộ channel.
+- Message phát ở event `message` (kèm `type`, `data`) và event theo từng loại (`ohlc`/`quote`/`trade`/`market_index`/`security_definition`).
 
-### Topic builders
+### Các method subscribe
 
-| Builder | Topic | Dữ liệu |
+| Method | Channel | Dữ liệu |
 | --- | --- | --- |
-| `Topics.stockInfo(symbol)` | `plaintext/quotes/stock/SI/{symbol}` | Giá khớp, KL, thay đổi |
-| `Topics.topPrice(symbol)` | `plaintext/quotes/stock/TP/{symbol}` | Sổ lệnh bid/ask |
-| `Topics.tick(symbol)` | `plaintext/quotes/stock/TICK/{symbol}` | Từng lệnh khớp |
-| `Topics.ohlc(symbol, resolution)` | `plaintext/quotes/stock/OHLC/{resolution}/{symbol}` | Nến realtime |
-| `Topics.marketIndex(code)` | `plaintext/quotes/index/{code}` | Chỉ số (VNINDEX, VN30…) |
-| `Topics.boardEvent(boardId?)` | `plaintext/quotes/board-event/{boardId}` | Sự kiện phiên |
+| `subscribeOhlc(symbols, resolution)` | `ohlc.{resolution}.json` | Nến realtime |
+| `subscribeQuote(symbols, boards?)` | `top_price.{board}.json` | Sổ lệnh bid/ask |
+| `subscribeTrade(symbols, boards?)` | `tick.{board}.json` | Tick khớp lệnh |
+| `subscribeSecDef(symbols, boards?)` | `security_definition.{board}.json` | Định nghĩa mã |
+| `subscribeMarketIndex(indices)` | `market_index.{index}.json` | Chỉ số (VNINDEX, VN30…) |
+| `subscribeChannel(spec)` | *(bất kỳ)* | Escape hatch cho channel thô |
 
-Broker mặc định: `wss://datafeed-lts-krx.dnse.com.vn:443/wss` (đổi qua `host/port/path`).
+`boards` mặc định là toàn bộ bảng KRX (`G1,G3,G4,G7,T1,T2,T3,T4,T6`) — truyền mảng để thu hẹp. Message route theo field `T` (t=trade, q=quote, b=ohlc, mi=market_index, sd=security_definition…).
 
 ---
 
@@ -256,18 +242,16 @@ Broker mặc định: `wss://datafeed-lts-krx.dnse.com.vn:443/wss` (đổi qua `
 src/
 ├── index.ts                 # public exports
 ├── RestClient.ts            # client REST chính, khai báo endpoint đã typed
-├── MarketDataWsClient.ts    # client realtime MQTT/WebSocket (EventEmitter)
-├── EntradeAuthClient.ts     # helper login lấy JWT (investorId + token)
+├── MarketDataWsClient.ts    # client realtime WebSocket OpenAPI (EventEmitter)
 ├── types/                   # request/response types theo domain
 │   ├── shared.ts            # enum: MarketType, OrderSide, OrderType...
 │   ├── client.ts            # RestClientOptions, RequestOptions, credentials
-│   ├── ws.ts                # MarketDataWsOptions, message & event types
+│   ├── ws.ts                # MarketDataWsOptions, channel & event types
 │   ├── account.ts · order.ts · market.ts · auth.ts
 │   └── index.ts
 └── util/
     ├── BaseRestClient.ts    # lớp trừu tượng: ký + axios + get/post/...Private
-    ├── node-support.ts      # HMAC signing (crypto)
-    ├── topics.ts            # builder topic MQTT (SI/TP/tick/ohlc/index)
+    ├── node-support.ts      # HMAC signing REST + WS (crypto)
     ├── requestUtils.ts      # serialise params, fill path params
     ├── DNSEAPIError.ts      # lỗi chuẩn hóa
     └── logger.ts            # logger cắm được (pluggable)
@@ -280,16 +264,16 @@ Muốn thêm endpoint mới: thêm 1 method vào `RestClient` gọi `getPrivate/
 ```bash
 npm install
 npm run build      # biên dịch -> dist/
-npm test           # chạy test ký HMAC + dryRun
+npm test           # chạy test ký HMAC (REST + WS) + dryRun
 npm run lint
 ```
 
 ## Lộ trình (roadmap)
 
-- [x] `MarketDataWsClient` — stream dữ liệu thị trường realtime qua MQTT/WebSocket
-- [ ] Đối chiếu & cố định chính xác topic KRX + endpoint login với docs live
-- [ ] Decode payload có schema (typed message cho SI/TP/tick/ohlc)
-- [ ] Tự đồng bộ lệch thời gian (clock drift) cho header `Date`
+- [x] `MarketDataWsClient` — realtime WebSocket OpenAPI (HMAC, cùng key/secret)
+- [ ] Decode payload có schema (typed message cho ohlc/quote/trade/index)
+- [ ] Hỗ trợ encoding msgpack (hiện chỉ JSON)
+- [ ] Realtime trading (order/position) qua WS — OpenAPI có hỗ trợ
 - [ ] Theo dõi rate-limit từ response header
 
 ## Miễn trừ trách nhiệm

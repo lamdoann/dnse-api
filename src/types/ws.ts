@@ -1,77 +1,110 @@
 import { DefaultLogger } from '../util/logger';
+import { OhlcResolution } from './shared';
 
 /**
- * Credentials & connection options for the DNSE realtime market-data feed
- * (MQTT over secure WebSocket).
+ * Options for the OpenAPI realtime market-data WebSocket client.
  *
- * NOTE: this feed uses the LightSpeed / EntradeX **JWT** auth (investorId +
- * token), which is different from the OpenAPI HMAC api-key/secret used by
- * {@link RestClient}. Obtain the JWT via {@link EntradeAuthClient.login} or
- * your own login flow.
+ * Uses the SAME `apiKey` / `apiSecret` as {@link RestClient} — the realtime
+ * feed authenticates with an HMAC handshake, not a separate login/JWT.
  */
 export interface MarketDataWsOptions {
-  /** Investor id — used as the MQTT username. */
-  investorId: string;
-  /** JWT access token — used as the MQTT password (valid ~8h). */
-  token: string;
+  /** API key (same as REST). */
+  apiKey: string;
+  /** API secret (same as REST) — signs the auth handshake. */
+  apiSecret: string;
 
   /**
-   * Broker host.
-   * @default 'datafeed-lts-krx.dnse.com.vn'
+   * Base WebSocket URL (no path). The client appends `/v1/stream?encoding=...`.
+   * @default 'wss://ws-openapi.dnse.com.vn'
    */
-  host?: string;
-  /** @default 443 */
-  port?: number;
-  /**
-   * WebSocket path on the broker.
-   * @default '/wss'
-   */
-  path?: string;
-  /**
-   * Prefix used when generating the MQTT clientId. The full id becomes
-   * `${clientIdPrefix}-${investorId}-${random}`.
-   * @default 'dnse-price-json-mqtt-ws-sub'
-   */
-  clientIdPrefix?: string;
+  baseUrl?: string;
 
-  /**
-   * MQTT protocol version. DNSE's broker speaks MQTT 5.
-   * @default 5
-   */
-  protocolVersion?: 4 | 5;
-  /** Keepalive in seconds. @default 60 */
-  keepalive?: number;
-  /**
-   * Delay between reconnect attempts in ms. Set 0 to disable auto-reconnect.
-   * @default 3000
-   */
+  /** Delay between reconnect attempts in ms. Set 0 to disable. @default 3000 */
   reconnectPeriod?: number;
-  /** Connect timeout in ms. @default 30000 */
-  connectTimeout?: number;
+  /** Max reconnect attempts before giving up. @default 10 */
+  maxReconnectAttempts?: number;
+  /** Ping interval in ms to keep the connection alive. @default 25000 */
+  pingInterval?: number;
 
   /** Inject a custom logger. */
   logger?: DefaultLogger;
 }
 
-/** A decoded market-data message delivered on a topic. */
-export interface MarketDataMessage<T = unknown> {
-  topic: string;
-  /** Parsed JSON payload (falls back to the raw string if not JSON). */
-  data: T;
-  /** Raw payload bytes as a UTF-8 string. */
-  raw: string;
+/** Boards used by symbol-scoped channels (trades, quotes, security_definition). */
+export const DEFAULT_BOARDS = [
+  'G1',
+  'G3',
+  'G4',
+  'G7',
+  'T1',
+  'T2',
+  'T3',
+  'T4',
+  'T6',
+] as const;
+
+/** A subscribable channel descriptor sent to the server. */
+export interface ChannelSpec {
+  /** Channel name, e.g. `ohlc.1.json`, `tick.G1.json`, `market_index.VNINDEX.json`. */
+  name: string;
+  /** Symbols to scope the channel to (omit for board/index-wide channels). */
+  symbols?: string[];
 }
 
-/** Strongly-typed event map emitted by {@link MarketDataWsClient}. */
+/**
+ * Message type discriminator carried in the `T` field of every data frame,
+ * mapped to a friendly event name.
+ */
+export const WS_MESSAGE_TYPES: Record<string, string> = {
+  t: 'trade',
+  te: 'trade_extra',
+  e: 'expected_price',
+  q: 'quote',
+  b: 'ohlc',
+  bc: 'ohlc_closed',
+  sd: 'security_definition',
+  mi: 'market_index',
+  emi: 'estimated_market_index',
+  a: 'account',
+  f: 'foreign',
+  s: 'session',
+  do: 'order_event',
+  eo: 'order_event',
+};
+
+/** A decoded realtime data frame. */
+export interface MarketDataMessage<T = Record<string, unknown>> {
+  /** Friendly event name (e.g. `ohlc`, `quote`, `trade`). */
+  type: string;
+  /** Raw `T` discriminator from the wire. */
+  rawType: string;
+  /** The decoded payload. */
+  data: T;
+}
+
+export interface SubscribeOhlcParams {
+  symbols: string[];
+  resolution: OhlcResolution;
+}
+
+/** Event map emitted by {@link MarketDataWsClient}. */
 export interface MarketDataWsEvents {
-  /** Connected & authenticated with the broker. */
+  /** Connected & authenticated (auth_success received). */
   open: () => void;
   /** Connection closed. */
   close: () => void;
   /** A reconnect attempt is starting. */
   reconnect: () => void;
-  /** Transport / protocol error. */
+  /** Re-authenticated & re-subscribed after a drop. */
+  reconnected: () => void;
+  /** Transport / protocol / auth error. */
   error: (err: Error) => void;
-  /** Any decoded message on any subscribed topic. */
+  /** Any decoded data frame. */
   message: (msg: MarketDataMessage) => void;
+  /** Convenience per-type events. */
+  ohlc: (msg: MarketDataMessage) => void;
+  quote: (msg: MarketDataMessage) => void;
+  trade: (msg: MarketDataMessage) => void;
+  security_definition: (msg: MarketDataMessage) => void;
+  market_index: (msg: MarketDataMessage) => void;
 }

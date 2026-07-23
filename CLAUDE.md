@@ -8,7 +8,7 @@ này.**
 
 `dnse-api` — SDK Node.js & TypeScript cho **DNSE OpenAPI** (chứng khoán VN):
 tài khoản, đặt lệnh, vị thế, dữ liệu thị trường (REST) + market data realtime
-(MQTT/WebSocket). Kiến trúc mô phỏng theo
+(WebSocket OpenAPI). Kiến trúc mô phỏng theo
 [`tiagosiebler/binance`](https://github.com/tiagosiebler/binance): một lớp
 `BaseRestClient` trừu tượng lo ký request, các client cụ thể chỉ khai báo
 endpoint đã gõ kiểu. Auth port từ [SDK chính thức DNSE](https://github.com/dnse-tech/openapi-sdk/tree/main/javascript).
@@ -21,7 +21,7 @@ endpoint đã gõ kiểu. Auth port từ [SDK chính thức DNSE](https://github
 ```bash
 npm install
 npm run build      # tsc -> dist/   (KHÔNG phải lib/)
-npm test           # jest: test ký HMAC + WS (hiện 16 test)
+npm test           # jest: test ký HMAC REST + WS (hiện 20 test)
 npm run lint       # eslint src
 npm run clean      # rimraf dist
 ```
@@ -30,15 +30,23 @@ npm run clean      # rimraf dist
   gitignore; chỉ commit `src/`. Gói npm chỉ đóng `dist/` (`package.json` → `files`).
 - Chỉ ship CommonJS. ESM vẫn `import` được nhờ Node đọc named export từ CJS.
 
-## Hai lớp API (QUAN TRỌNG — auth khác nhau)
+## Auth — CHỈ dùng OpenAPI (HMAC), KHÔNG dùng Entrade
 
-1. **OpenAPI** (`openapi.dnse.com.vn`) — dùng cho `RestClient`. Auth = **HMAC
-   HTTP-signature** (api-key + secret). Đây là phần chính, đã build đầy đủ.
-   **Mọi endpoint đều cần key & được ký** — kể cả dữ liệu giá (OHLC, secdef);
-   gọi không có key → `401 X-API-Key header required`. Không có REST endpoint
-   public.
-2. **LightSpeed / EntradeX** — dùng cho market data realtime. Auth = **JWT**
-   (`investorId` + `token`), lấy qua `EntradeAuthClient`. KHÁC hoàn toàn HMAC.
+Toàn bộ thư viện thuần **DNSE OpenAPI**, xác thực bằng **HMAC api-key/secret**:
+
+- **REST** (`openapi.dnse.com.vn`) → `RestClient`. Ký HMAC HTTP-signature
+  (draft-cavage). **Mọi endpoint đều cần key & được ký** — kể cả dữ liệu giá
+  (OHLC, secdef); gọi không key → `401 X-API-Key header required`. Không có REST
+  endpoint public.
+- **Realtime** (`wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json`) →
+  `MarketDataWsClient`. WebSocket **thuần** (lib `ws`), frame JSON. Auth handshake
+  gửi `{action:"auth", api_key, signature, timestamp, nonce}`, ký
+  `HMAC-SHA256(secret, "{apiKey}:{timestamp}:{nonce}")` dạng **hex** — **dùng
+  cùng key/secret với REST**, KHÔNG cần login/JWT.
+
+LƯU Ý LỊCH SỬ: từng có bản dùng MQTT + JWT (hệ EntradeX/LightSpeed cũ) — đã bỏ
+hẳn vì OpenAPI có feed realtime riêng bằng chính key/secret. Đừng tái introduce
+Entrade/MQTT trừ khi có lý do rõ ràng.
 
 ## Kiến trúc mã nguồn
 
@@ -46,16 +54,15 @@ npm run clean      # rimraf dist
 src/
 ├── index.ts                 # public exports
 ├── RestClient.ts            # client REST chính (endpoint đã typed)
-├── MarketDataWsClient.ts    # realtime MQTT/WebSocket (EventEmitter)
-├── EntradeAuthClient.ts     # helper login lấy JWT cho WS
+├── MarketDataWsClient.ts    # realtime WebSocket OpenAPI (EventEmitter, lib ws)
 ├── types/                   # request/response types theo domain
 │   ├── shared.ts            # enum: MarketType, OrderSide, OrderType, OtpType…
-│   ├── client.ts · ws.ts · account.ts · order.ts · market.ts · auth.ts
+│   ├── ws.ts                # MarketDataWsOptions, channel/message/event, boards
+│   ├── client.ts · account.ts · order.ts · market.ts · auth.ts
 │   └── index.ts
 └── util/
     ├── BaseRestClient.ts    # trừu tượng: ký + axios + get/post/…Private
-    ├── node-support.ts      # HMAC signing (crypto)
-    ├── topics.ts            # builder topic MQTT
+    ├── node-support.ts      # HMAC signing REST (base64) + WS (hex) (crypto)
     ├── requestUtils.ts      # serialise params, fill path params
     ├── DNSEAPIError.ts      # lỗi chuẩn hóa
     └── logger.ts            # logger cắm được
@@ -86,24 +93,24 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 - **`dryRun`** (toàn cục hoặc từng call) trả về mô tả request thay vì gọi mạng —
   dùng để test/inspect. Test dựa nhiều vào cái này.
 - **Lỗi** luôn chuẩn hóa thành `DNSEAPIError` (`status`, `body`, `request`).
-- **WS**: `subscribe()` nhận topic string thô hoặc builder trong `util/topics.ts`;
-  tự reconnect + re-subscribe; phát event `message` + event theo tên topic.
+- **WS**: subscribe qua helper (`subscribeOhlc/Quote/Trade/SecDef/MarketIndex`)
+  hoặc `subscribeChannel(spec)` thô. Channel name: `<type>.<param>.json` (ohlc
+  dùng resolution; trade/quote/secdef dùng board, mặc định toàn bộ
+  `DEFAULT_BOARDS`; market_index dùng mã chỉ số). Tự reconnect → re-auth →
+  re-subscribe; message route theo field `T`; phát `message` + event theo type.
+  Hiện chỉ encoding JSON (msgpack chưa làm).
 
-## Điểm CHƯA verify (đánh dấu `VERIFY` trong code)
+## Điểm chưa chốt
 
-Docs LightSpeed/MQTT của DNSE trên GitBook render JS nên chưa xác thực tự động:
-1. **Topic strings KRX** trong `util/topics.ts` — theo convention
-   `plaintext/quotes/...`; đối chiếu lại docs live nếu subscribe không ra dữ liệu.
-2. **Endpoint login** trong `EntradeAuthClient` (`/user-service/api/auth`,
-   `/user-service/api/me`) — theo flow EntradeX phổ biến; chỉnh nếu gateway khác.
-
-Khi xác nhận được thông tin thật → sửa code, bỏ chú thích `VERIFY`, và cập nhật
-mục này + README.
+- Protocol WS đã verify theo SDK Python chính thức (`dnse-tech/openapi-sdk`,
+  thư mục `python/dnse/websocket/`). Chưa chạy live với key thật.
+- Encoding msgpack chưa hỗ trợ (mới JSON). Realtime trading (order/position) qua
+  WS OpenAPI có hỗ trợ nhưng chưa build.
 
 ## Trạng thái hiện tại
 
 - REST: đầy đủ endpoint theo SDK gốc (accounts, balances, loan packages, ppse,
   positions, orders read/write, history, corporate actions, OHLC, secdef, OTP →
   trading token).
-- WS: `MarketDataWsClient` + `EntradeAuthClient` + topic builders — xong, có test.
-- 16/16 test pass. Build sạch ra `dist/`.
+- WS: `MarketDataWsClient` thuần OpenAPI (ws + HMAC handshake) — xong, có test.
+- 20/20 test pass. Build sạch ra `dist/`.

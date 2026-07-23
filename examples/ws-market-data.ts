@@ -1,54 +1,40 @@
 /**
- * Realtime market data over MQTT/WebSocket.
+ * Realtime market data qua WebSocket OpenAPI — dùng chính API key/secret.
  *
- *   DNSE_USERNAME=... DNSE_PASSWORD=... npx ts-node examples/ws-market-data.ts
+ *   DNSE_API_KEY=... DNSE_API_SECRET=... npx ts-node examples/ws-market-data.ts
  *
- * Or pass an existing JWT directly:
- *   DNSE_INVESTOR_ID=... DNSE_TOKEN=... npx ts-node examples/ws-market-data.ts
+ * Không cần login/JWT riêng — feed realtime ký HMAC bằng cùng cặp key/secret
+ * như REST.
  */
-import {
-  EntradeAuthClient,
-  MarketDataWsClient,
-  Topics,
-} from '../src';
+import { MarketDataWsClient } from '../src';
 
 async function main() {
-  // --- 1) Obtain JWT credentials --------------------------------------
-  let investorId = process.env.DNSE_INVESTOR_ID;
-  let token = process.env.DNSE_TOKEN;
-
-  if (!investorId || !token) {
-    const auth = new EntradeAuthClient();
-    ({ investorId, token } = await auth.authenticate(
-      process.env.DNSE_USERNAME!,
-      process.env.DNSE_PASSWORD!,
-    ));
-    console.log('Authenticated as investor', investorId);
-  }
-
-  // --- 2) Connect & subscribe -----------------------------------------
-  const ws = new MarketDataWsClient({ investorId, token });
+  const ws = new MarketDataWsClient({
+    apiKey: process.env.DNSE_API_KEY!,
+    apiSecret: process.env.DNSE_API_SECRET!,
+  });
 
   ws.on('open', () => {
-    console.log('Connected — subscribing...');
-    ws.subscribe([
-      Topics.stockInfo('HPG'),
-      Topics.topPrice('HPG'),
-      Topics.marketIndex('VNINDEX'),
-    ]);
+    console.log('Đã kết nối & xác thực — subscribe...');
+    ws.subscribeOhlc(['VN30F1M', 'SSI'], '1'); // nến 1 phút
+    ws.subscribeQuote(['VN30F1M']); // bid/ask
+    ws.subscribeMarketIndex(['VNINDEX', 'VN30']); // chỉ số
   });
 
-  ws.on('message', (msg) => {
-    console.log(`[${msg.topic}]`, msg.data);
-  });
+  ws.on('ohlc', (m) => console.log('OHLC   ', m.data));
+  ws.on('quote', (m) => console.log('QUOTE  ', m.data));
+  ws.on('market_index', (m) => console.log('INDEX  ', m.data));
+
+  // Hoặc nghe tất cả:
+  // ws.on('message', (m) => console.log(m.type, m.data));
 
   ws.on('reconnect', () => console.log('reconnecting...'));
+  ws.on('reconnected', () => console.log('reconnected'));
   ws.on('error', (err) => console.error('ws error:', err.message));
   ws.on('close', () => console.log('closed'));
 
   ws.connect();
 
-  // Stop after 60s for the demo.
   setTimeout(() => ws.close().then(() => process.exit(0)), 60_000);
 }
 

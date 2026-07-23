@@ -1,25 +1,21 @@
 import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
 
-import mqtt, { IClientOptions, MqttClient } from 'mqtt';
+import WebSocket from 'ws';
 
 import { DefaultLogger } from './util/logger';
+import { signWsAuth } from './util/node-support';
 import {
+  ChannelSpec,
+  DEFAULT_BOARDS,
   MarketDataMessage,
   MarketDataWsEvents,
   MarketDataWsOptions,
+  WS_MESSAGE_TYPES,
 } from './types/ws';
+import { OhlcResolution } from './types/shared';
 
-const DEFAULTS = {
-  host: 'datafeed-lts-krx.dnse.com.vn',
-  port: 443,
-  path: '/wss',
-  clientIdPrefix: 'dnse-price-json-mqtt-ws-sub',
-  protocolVersion: 5 as const,
-  keepalive: 60,
-  reconnectPeriod: 3000,
-  connectTimeout: 30_000,
-};
+const DEFAULT_BASE_URL = 'wss://ws-openapi.dnse.com.vn';
+const ENCODING = 'json';
 
 // Typed EventEmitter surface.
 export declare interface MarketDataWsClient {
@@ -33,184 +29,320 @@ export declare interface MarketDataWsClient {
 }
 
 /**
- * Realtime market-data client for DNSE, over MQTT (JSON payloads) on a secure
- * WebSocket — mirrors the tiagosiebler `WebsocketClient` pattern: an
- * EventEmitter you `connect()`, then `subscribe()` to topics and listen for
- * `message` events.
+ * Realtime market-data client for the **DNSE OpenAPI** feed
+ * (`wss://ws-openapi.dnse.com.vn`) — plain WebSocket, JSON frames, HMAC auth
+ * handshake using the same `apiKey`/`apiSecret` as {@link RestClient}.
+ *
+ * Mirrors the tiagosiebler `WebsocketClient` pattern: an EventEmitter you
+ * `connect()`, then subscribe via typed helpers and listen for `message`.
  *
  * @example
  * ```ts
- * const ws = new MarketDataWsClient({ investorId, token });
- * ws.on('open', () => ws.subscribe(Topics.stockInfo('HPG')));
- * ws.on('message', (m) => console.log(m.topic, m.data));
+ * const ws = new MarketDataWsClient({ apiKey, apiSecret });
+ * ws.on('open', () => ws.subscribeOhlc(['VN30F1M'], '1'));
+ * ws.on('ohlc', (m) => console.log(m.data));
  * ws.connect();
  * ```
  */
 export class MarketDataWsClient extends EventEmitter {
-  private readonly options: Required<Omit<MarketDataWsOptions, 'logger'>>;
+  private readonly apiKey: string;
+  private readonly apiSecret: string;
+  private readonly baseUrl: string;
+  private readonly reconnectPeriod: number;
+  private readonly maxReconnectAttempts: number;
+  private readonly pingInterval: number;
   private readonly logger: DefaultLogger;
-  private client: MqttClient | null = null;
-  /** Topics to (re)subscribe to — survives reconnects. */
-  private readonly subscriptions = new Set<string>();
+
+  private ws: WebSocket | null = null;
+  private authenticated = false;
+  private reconnectAttempts = 0;
+  private closing = false;
+  private pingTimer: NodeJS.Timeout | null = null;
+  private hasConnectedOnce = false;
+
+  /** Tracked channels (name -> symbols), re-subscribed after reconnect. */
+  private readonly channels = new Map<string, string[] | undefined>();
 
   constructor(options: MarketDataWsOptions) {
     super();
-    if (!options.investorId || !options.token) {
-      throw new Error(
-        'MarketDataWsClient requires { investorId, token } (JWT). ' +
-          'Obtain them via EntradeAuthClient.login() or your own login flow.',
-      );
+    if (!options.apiKey || !options.apiSecret) {
+      throw new Error('MarketDataWsClient requires { apiKey, apiSecret }.');
     }
+    this.apiKey = options.apiKey;
+    this.apiSecret = options.apiSecret;
+    this.baseUrl = (options.baseUrl || DEFAULT_BASE_URL).replace(/\/$/, '');
+    this.reconnectPeriod = options.reconnectPeriod ?? 3000;
+    this.maxReconnectAttempts = options.maxReconnectAttempts ?? 10;
+    this.pingInterval = options.pingInterval ?? 25_000;
     this.logger = options.logger || DefaultLogger;
-    this.options = {
-      investorId: options.investorId,
-      token: options.token,
-      host: options.host ?? DEFAULTS.host,
-      port: options.port ?? DEFAULTS.port,
-      path: options.path ?? DEFAULTS.path,
-      clientIdPrefix: options.clientIdPrefix ?? DEFAULTS.clientIdPrefix,
-      protocolVersion: options.protocolVersion ?? DEFAULTS.protocolVersion,
-      keepalive: options.keepalive ?? DEFAULTS.keepalive,
-      reconnectPeriod: options.reconnectPeriod ?? DEFAULTS.reconnectPeriod,
-      connectTimeout: options.connectTimeout ?? DEFAULTS.connectTimeout,
-    };
   }
 
-  /** Build the broker-mandated clientId: `<prefix>-<investorId>-<random>`. */
-  private buildClientId(): string {
-    const random = crypto.randomBytes(6).toString('hex');
-    return `${this.options.clientIdPrefix}-${this.options.investorId}-${random}`;
-  }
+  // ===================================================================
+  // Connection lifecycle
+  // ===================================================================
 
-  /** Open the connection. Safe to call once; use `close()` to tear down. */
+  /** Open the connection and authenticate. */
   connect(): this {
-    if (this.client) {
-      this.logger.warning('connect() called but client already exists');
+    if (this.ws) {
+      this.logger.warning('connect() called but a socket already exists');
       return this;
     }
+    this.closing = false;
+    const url = `${this.baseUrl}/v1/stream?encoding=${ENCODING}`;
+    this.logger.trace('connecting', url);
 
-    const o = this.options;
-    const url = `wss://${o.host}:${o.port}${o.path}`;
-    const mqttOptions: IClientOptions = {
-      clientId: this.buildClientId(),
-      username: o.investorId,
-      password: o.token,
-      protocolVersion: o.protocolVersion,
-      keepalive: o.keepalive,
-      reconnectPeriod: o.reconnectPeriod,
-      connectTimeout: o.connectTimeout,
-      clean: true,
-    };
+    const ws = new WebSocket(url);
+    this.ws = ws;
 
-    this.logger.trace('connecting', url, mqttOptions.clientId);
-    const client = mqtt.connect(url, mqttOptions);
-    this.client = client;
-
-    client.on('connect', () => {
-      this.logger.info('market-data connected');
-      this.resubscribeAll();
-      this.emit('open');
+    ws.on('open', () => {
+      this.logger.trace('socket open, sending auth');
+      this.sendAuth();
     });
-    client.on('reconnect', () => {
-      this.logger.info('market-data reconnecting');
-      this.emit('reconnect');
+    ws.on('message', (raw: WebSocket.RawData) => this.handleRaw(raw));
+    ws.on('error', (err) => {
+      this.logger.error('ws error', err);
+      this.emit('error', err instanceof Error ? err : new Error(String(err)));
     });
-    client.on('close', () => {
-      this.logger.info('market-data connection closed');
+    ws.on('close', () => {
+      this.logger.info('ws closed');
+      this.cleanupSocket();
       this.emit('close');
+      this.maybeReconnect();
     });
-    client.on('error', (err) => {
-      this.logger.error('market-data error', err);
-      this.emit('error', err);
-    });
-    client.on('message', (topic, payload) => this.handleMessage(topic, payload));
 
     return this;
   }
 
-  private handleMessage(topic: string, payload: Buffer): void {
-    const raw = payload.toString('utf8');
-    let data: unknown = raw;
-    try {
-      data = JSON.parse(raw);
-    } catch {
-      // Non-JSON payload — keep the raw string.
-    }
-    const msg: MarketDataMessage = { topic, data, raw };
-    this.emit('message', msg);
-    // Also emit a per-topic event for convenient targeted listeners.
-    this.emit(topic as keyof MarketDataWsEvents, msg as never);
-  }
-
-  private resubscribeAll(): void {
-    if (!this.client || this.subscriptions.size === 0) {
-      return;
-    }
-    const topics = [...this.subscriptions];
-    this.client.subscribe(topics, { qos: 0 }, (err) => {
-      if (err) {
-        this.emit('error', err);
-      } else {
-        this.logger.trace('resubscribed', topics);
-      }
-    });
-  }
-
-  /**
-   * Subscribe to one or more topics. Topics are remembered and automatically
-   * re-subscribed after a reconnect. If not yet connected, they are queued and
-   * applied on connect.
-   */
-  subscribe(topics: string | string[]): this {
-    const list = Array.isArray(topics) ? topics : [topics];
-    list.forEach((t) => this.subscriptions.add(t));
-    if (this.client?.connected) {
-      this.client.subscribe(list, { qos: 0 }, (err) => {
-        if (err) {
-          this.emit('error', err);
-        } else {
-          this.logger.trace('subscribed', list);
-        }
-      });
-    }
-    return this;
-  }
-
-  /** Unsubscribe from one or more topics. */
-  unsubscribe(topics: string | string[]): this {
-    const list = Array.isArray(topics) ? topics : [topics];
-    list.forEach((t) => this.subscriptions.delete(t));
-    if (this.client?.connected) {
-      this.client.unsubscribe(list, (err?: Error) => {
-        if (err) {
-          this.emit('error', err);
-        }
-      });
-    }
-    return this;
-  }
-
-  /** The topics currently tracked by this client. */
-  getSubscriptions(): string[] {
-    return [...this.subscriptions];
-  }
-
-  /** Whether the underlying MQTT client is connected. */
-  isConnected(): boolean {
-    return !!this.client?.connected;
-  }
-
-  /** Close the connection. Pass `force` to skip the graceful DISCONNECT. */
-  close(force = false): Promise<void> {
+  /** Close the connection and stop reconnecting. */
+  async close(): Promise<void> {
+    this.closing = true;
+    this.stopPing();
     return new Promise((resolve) => {
-      if (!this.client) {
+      if (!this.ws) {
         resolve();
         return;
       }
-      this.client.end(force, {}, () => {
-        this.client = null;
-        resolve();
-      });
+      const ws = this.ws;
+      ws.once('close', () => resolve());
+      ws.close();
     });
+  }
+
+  private cleanupSocket(): void {
+    this.stopPing();
+    this.authenticated = false;
+    this.ws = null;
+  }
+
+  private maybeReconnect(): void {
+    if (this.closing || this.reconnectPeriod <= 0) {
+      return;
+    }
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.emit('error', new Error('Max reconnect attempts reached'));
+      return;
+    }
+    this.reconnectAttempts += 1;
+    const delay = this.reconnectPeriod * Math.min(this.reconnectAttempts, 5);
+    this.logger.info(`reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`);
+    this.emit('reconnect');
+    setTimeout(() => {
+      if (!this.closing) {
+        this.connect();
+      }
+    }, delay);
+  }
+
+  // ===================================================================
+  // Auth handshake
+  // ===================================================================
+
+  private sendAuth(): void {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const nonce = `${Date.now() * 1000 + Math.floor(Math.random() * 1000)}`;
+    const signature = signWsAuth(this.apiSecret, this.apiKey, timestamp, nonce);
+    this.sendRaw({
+      action: 'auth',
+      api_key: this.apiKey,
+      signature,
+      timestamp,
+      nonce,
+    });
+  }
+
+  // ===================================================================
+  // Subscriptions
+  // ===================================================================
+
+  private channelSuffix(): string {
+    return `.${ENCODING}`;
+  }
+
+  /** Subscribe to OHLC candles for symbols at a resolution. */
+  subscribeOhlc(symbols: string[], resolution: OhlcResolution): this {
+    return this.subscribeChannel({ name: `ohlc.${resolution}${this.channelSuffix()}`, symbols });
+  }
+
+  /** Subscribe to trade (tick) data for symbols across the given boards. */
+  subscribeTrade(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
+    return this.subscribeChannel(
+      boards.map((b) => ({ name: `tick.${b}${this.channelSuffix()}`, symbols })),
+    );
+  }
+
+  /** Subscribe to top-of-book quotes for symbols across the given boards. */
+  subscribeQuote(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
+    return this.subscribeChannel(
+      boards.map((b) => ({ name: `top_price.${b}${this.channelSuffix()}`, symbols })),
+    );
+  }
+
+  /** Subscribe to security-definition updates for symbols across boards. */
+  subscribeSecDef(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
+    return this.subscribeChannel(
+      boards.map((b) => ({ name: `security_definition.${b}${this.channelSuffix()}`, symbols })),
+    );
+  }
+
+  /** Subscribe to one or more market indices (e.g. `VNINDEX`, `VN30`, `HNXINDEX`). */
+  subscribeMarketIndex(indices: string[]): this {
+    return this.subscribeChannel(
+      indices.map((i) => ({ name: `market_index.${i}${this.channelSuffix()}` })),
+    );
+  }
+
+  /** Low-level: subscribe to raw channel spec(s). Escape hatch for any channel. */
+  subscribeChannel(channels: ChannelSpec | ChannelSpec[]): this {
+    const list = Array.isArray(channels) ? channels : [channels];
+    list.forEach((c) => this.channels.set(c.name, c.symbols));
+    if (this.authenticated) {
+      this.sendRaw({ action: 'subscribe', channels: list });
+    }
+    return this;
+  }
+
+  /** Unsubscribe from channel(s) by name. */
+  unsubscribe(names: string | string[]): this {
+    const list = Array.isArray(names) ? names : [names];
+    const specs = list.map((name) => ({ name, symbols: this.channels.get(name) }));
+    list.forEach((n) => this.channels.delete(n));
+    if (this.authenticated) {
+      this.sendRaw({ action: 'unsubscribe', channels: specs });
+    }
+    return this;
+  }
+
+  private resubscribeAll(): void {
+    if (this.channels.size === 0) {
+      return;
+    }
+    const specs: ChannelSpec[] = [...this.channels.entries()].map(([name, symbols]) => ({
+      name,
+      symbols,
+    }));
+    this.sendRaw({ action: 'subscribe', channels: specs });
+    this.logger.trace('resubscribed', specs.length, 'channels');
+  }
+
+  /** Names of the channels currently tracked. */
+  getChannels(): string[] {
+    return [...this.channels.keys()];
+  }
+
+  /** Whether the socket is connected and authenticated. */
+  isConnected(): boolean {
+    return this.authenticated && this.ws?.readyState === WebSocket.OPEN;
+  }
+
+  // ===================================================================
+  // Message handling
+  // ===================================================================
+
+  private handleRaw(raw: WebSocket.RawData): void {
+    let msg: Record<string, unknown>;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch (err) {
+      this.emit('error', new Error(`Failed to parse ws message: ${(err as Error).message}`));
+      return;
+    }
+
+    // Control frames carry an `action`; data frames carry a `T` discriminator.
+    if (typeof msg.action === 'string') {
+      this.handleControl(msg as { action: string; message?: string });
+      return;
+    }
+    if (typeof msg.T === 'string') {
+      this.handleData(msg);
+    }
+  }
+
+  private handleControl(msg: { action: string; message?: string }): void {
+    switch (msg.action) {
+      case 'auth_success': {
+        this.authenticated = true;
+        const wasReconnect = this.hasConnectedOnce;
+        this.hasConnectedOnce = true;
+        this.reconnectAttempts = 0;
+        this.startPing();
+        this.resubscribeAll();
+        this.emit('open');
+        if (wasReconnect) {
+          this.emit('reconnected');
+        }
+        break;
+      }
+      case 'auth_error':
+        this.emit('error', new Error(`Authentication failed: ${msg.message ?? 'unknown'}`));
+        break;
+      case 'ping':
+        this.sendRaw({ action: 'pong' });
+        break;
+      case 'pong':
+        // heartbeat acknowledged
+        break;
+      default:
+        this.logger.trace('unhandled control frame', msg.action);
+    }
+  }
+
+  private handleData(msg: Record<string, unknown>): void {
+    const rawType = msg.T as string;
+    const type = WS_MESSAGE_TYPES[rawType] || rawType;
+    const decoded: MarketDataMessage = { type, rawType, data: msg };
+    this.emit('message', decoded);
+    // Emit a per-type event when it's one of the declared convenience events.
+    this.emit(type as keyof MarketDataWsEvents, decoded as never);
+  }
+
+  // ===================================================================
+  // Heartbeat & low-level send
+  // ===================================================================
+
+  private startPing(): void {
+    this.stopPing();
+    if (this.pingInterval <= 0) {
+      return;
+    }
+    this.pingTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.sendRaw({ action: 'ping' });
+      }
+    }, this.pingInterval);
+  }
+
+  private stopPing(): void {
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
+  }
+
+  private sendRaw(obj: unknown): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      this.logger.warning('sendRaw called while socket not open');
+      return;
+    }
+    this.ws.send(JSON.stringify(obj));
   }
 }
