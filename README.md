@@ -151,6 +151,7 @@ try {
 ### Dữ liệu thị trường (cần key)
 | Method | Mô tả | Endpoint |
 | --- | --- | --- |
+| `getInstruments(params?)` | Liệt kê mã (lọc theo market/nhóm) | `GET /instruments` |
 | `getSecurityDefinition(symbol, params?)` | Thông tin mã (trần/sàn/lô…) | `GET /price/{symbol}/secdef` |
 | `getOhlc(market, params)` | Nến OHLC | `GET /price/ohlc` |
 

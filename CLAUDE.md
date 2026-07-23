@@ -112,8 +112,11 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 ## Trạng thái hiện tại
 
 - REST: đầy đủ endpoint theo SDK gốc (accounts, balances, loan packages, ppse,
-  positions, orders read/write, history, corporate actions, OHLC, secdef, OTP →
-  trading token).
+  positions, orders read/write, history, corporate actions, instruments, OHLC,
+  secdef, OTP → trading token). `getInstruments` = `GET /instruments` (query:
+  symbol/marketId/securityGroupId/indexName/limit/page) — dùng để liệt kê mã;
+  DNSE không có enum public cho "phái sinh" nên lọc client-side (xem
+  `examples/derivatives-realtime.ts`).
 - WS: `WebsocketClient` thuần OpenAPI (ws + HMAC handshake) — market data
   (ohlc/quote/trade/secdef/market_index) + trading/tài khoản (orders/positions/
   account/order_event/position_event, có bản broker.*). Có test.

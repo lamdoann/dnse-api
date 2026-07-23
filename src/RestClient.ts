@@ -8,6 +8,7 @@ import {
   DryRunResult,
   GetCorporateActionHistoryParams,
   GetExecutionDetailParams,
+  GetInstrumentsParams,
   GetLoanPackagesParams,
   GetOhlcParams,
   GetOrderDetailParams,
@@ -15,6 +16,8 @@ import {
   GetPositionsParams,
   GetPpseParams,
   GetSecurityDefinitionParams,
+  Instrument,
+  InstrumentsResponse,
   LoanPackage,
   MarketType,
   NewOrderParams,
@@ -273,6 +276,18 @@ export class RestClient extends BaseRestClient {
   // ===================================================================
   // Market data
   // ===================================================================
+
+  /**
+   * List tradable instruments (securities), optionally filtered by market /
+   * security group / index. Use to enumerate the symbol universe.
+   */
+  getInstruments(params?: GetInstrumentsParams, options?: RequestOptions) {
+    return this.getPrivate<InstrumentsResponse | Instrument[] | DryRunResult>(
+      '/instruments',
+      params ? { ...params } : undefined,
+      options,
+    );
+  }
 
   /**
    * Security definition (board, ceiling/floor, lot size, ...).

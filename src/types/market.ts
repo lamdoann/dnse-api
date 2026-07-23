@@ -5,6 +5,42 @@ export interface GetSecurityDefinitionParams {
   boardId?: string;
 }
 
+/** Filters for listing tradable instruments (`GET /instruments`). */
+export interface GetInstrumentsParams {
+  symbol?: string;
+  /** Market id filter. */
+  marketId?: string;
+  /**
+   * Security group id filter — distinguishes stock / futures / etf / etc.
+   * The exact code for derivatives is not in the public SDK; filter
+   * client-side if unsure (see the `derivatives-realtime` example).
+   */
+  securityGroupId?: string;
+  indexName?: string;
+  limit?: number;
+  page?: number;
+}
+
+/** A tradable instrument as returned by `GET /instruments`. */
+export interface Instrument {
+  symbol: string;
+  name?: string;
+  marketId?: string;
+  securityGroupId?: string;
+  securityType?: string;
+  exchange?: string;
+  [key: string]: unknown;
+}
+
+/** Response of `GET /instruments` (array, possibly wrapped + paginated). */
+export interface InstrumentsResponse {
+  instruments?: Instrument[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  [key: string]: unknown;
+}
+
 /** Reference / definition data for a security. */
 export interface SecurityDefinition {
   symbol: string;
