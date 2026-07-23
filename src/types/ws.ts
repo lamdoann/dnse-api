@@ -1,5 +1,5 @@
 import { DefaultLogger } from '../util/logger';
-import { OhlcResolution } from './shared';
+import { MarketType, OhlcResolution } from './shared';
 
 /**
  * Options for the OpenAPI realtime market-data WebSocket client.
@@ -70,6 +70,8 @@ export const WS_MESSAGE_TYPES: Record<string, string> = {
   s: 'session',
   do: 'order_event',
   eo: 'order_event',
+  dp: 'position_event',
+  ep: 'position_event',
 };
 
 /** A decoded realtime data frame. */
@@ -87,7 +89,10 @@ export interface SubscribeOhlcParams {
   resolution: OhlcResolution;
 }
 
-/** Event map emitted by {@link MarketDataWsClient}. */
+/** Market type accepted by order/position event subscriptions. */
+export type WsMarketType = MarketType;
+
+/** Event map emitted by {@link WebsocketClient}. */
 export interface MarketDataWsEvents {
   /** Connected & authenticated (auth_success received). */
   open: () => void;
@@ -101,10 +106,14 @@ export interface MarketDataWsEvents {
   error: (err: Error) => void;
   /** Any decoded data frame. */
   message: (msg: MarketDataMessage) => void;
-  /** Convenience per-type events. */
+  // Market-data per-type events.
   ohlc: (msg: MarketDataMessage) => void;
   quote: (msg: MarketDataMessage) => void;
   trade: (msg: MarketDataMessage) => void;
   security_definition: (msg: MarketDataMessage) => void;
   market_index: (msg: MarketDataMessage) => void;
+  // Trading / account per-type events (private).
+  order_event: (msg: MarketDataMessage) => void;
+  position_event: (msg: MarketDataMessage) => void;
+  account: (msg: MarketDataMessage) => void;
 }

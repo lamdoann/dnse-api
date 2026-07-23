@@ -1,5 +1,7 @@
 export { RestClient } from './RestClient';
-export { MarketDataWsClient } from './MarketDataWsClient';
+export { WebsocketClient } from './WebsocketClient';
+// Backward-compatible alias — the client now handles trading streams too.
+export { WebsocketClient as MarketDataWsClient } from './WebsocketClient';
 
 export { BaseRestClient } from './util/BaseRestClient';
 export { DNSEAPIError } from './util/DNSEAPIError';

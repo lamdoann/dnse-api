@@ -12,13 +12,13 @@ import {
   MarketDataWsOptions,
   WS_MESSAGE_TYPES,
 } from './types/ws';
-import { OhlcResolution } from './types/shared';
+import { MarketType, OhlcResolution } from './types/shared';
 
 const DEFAULT_BASE_URL = 'wss://ws-openapi.dnse.com.vn';
 const ENCODING = 'json';
 
 // Typed EventEmitter surface.
-export declare interface MarketDataWsClient {
+export declare interface WebsocketClient {
   on<E extends keyof MarketDataWsEvents>(event: E, listener: MarketDataWsEvents[E]): this;
   once<E extends keyof MarketDataWsEvents>(event: E, listener: MarketDataWsEvents[E]): this;
   off<E extends keyof MarketDataWsEvents>(event: E, listener: MarketDataWsEvents[E]): this;
@@ -29,22 +29,28 @@ export declare interface MarketDataWsClient {
 }
 
 /**
- * Realtime market-data client for the **DNSE OpenAPI** feed
+ * Realtime client for the **DNSE OpenAPI** WebSocket feed
  * (`wss://ws-openapi.dnse.com.vn`) — plain WebSocket, JSON frames, HMAC auth
  * handshake using the same `apiKey`/`apiSecret` as {@link RestClient}.
  *
- * Mirrors the tiagosiebler `WebsocketClient` pattern: an EventEmitter you
- * `connect()`, then subscribe via typed helpers and listen for `message`.
+ * Handles both **market data** (ohlc, quote, trade, index, security definition)
+ * and **private trading/account** streams (orders, positions, account, order &
+ * position events). Mirrors the tiagosiebler `WebsocketClient` pattern: an
+ * EventEmitter you `connect()`, then subscribe via typed helpers.
  *
  * @example
  * ```ts
- * const ws = new MarketDataWsClient({ apiKey, apiSecret });
- * ws.on('open', () => ws.subscribeOhlc(['VN30F1M'], '1'));
+ * const ws = new WebsocketClient({ apiKey, apiSecret });
+ * ws.on('open', () => {
+ *   ws.subscribeOhlc(['VN30F1M'], '1');
+ *   ws.subscribeOrders();
+ * });
  * ws.on('ohlc', (m) => console.log(m.data));
+ * ws.on('order_event', (m) => console.log(m.data));
  * ws.connect();
  * ```
  */
-export class MarketDataWsClient extends EventEmitter {
+export class WebsocketClient extends EventEmitter {
   private readonly apiKey: string;
   private readonly apiSecret: string;
   private readonly baseUrl: string;
@@ -66,7 +72,7 @@ export class MarketDataWsClient extends EventEmitter {
   constructor(options: MarketDataWsOptions) {
     super();
     if (!options.apiKey || !options.apiSecret) {
-      throw new Error('MarketDataWsClient requires { apiKey, apiSecret }.');
+      throw new Error('WebsocketClient requires { apiKey, apiSecret }.');
     }
     this.apiKey = options.apiKey;
     this.apiSecret = options.apiSecret;
@@ -209,6 +215,54 @@ export class MarketDataWsClient extends EventEmitter {
     return this.subscribeChannel(
       indices.map((i) => ({ name: `market_index.${i}${this.channelSuffix()}` })),
     );
+  }
+
+  // ----- Private: trading & account (require api key/secret) -------------
+
+  /** Subscribe to the authenticated user's order updates (`orders`). */
+  subscribeOrders(): this {
+    return this.subscribeChannel({ name: 'orders' });
+  }
+
+  /** Subscribe to the authenticated user's position updates (`positions`). */
+  subscribePositions(): this {
+    return this.subscribeChannel({ name: 'positions' });
+  }
+
+  /** Subscribe to account-level updates (cash/asset changes) (`account`). */
+  subscribeAccount(): this {
+    return this.subscribeChannel({ name: 'account' });
+  }
+
+  /** Subscribe to order events for a market (`order.{marketType}.json`). */
+  subscribeOrderEvent(marketType: MarketType = 'STOCK'): this {
+    return this.subscribeChannel({ name: `order.${marketType}${this.channelSuffix()}` });
+  }
+
+  /** Subscribe to position events for a market (`position.{marketType}.json`). */
+  subscribePositionEvent(marketType: MarketType = 'STOCK'): this {
+    return this.subscribeChannel({ name: `position.${marketType}${this.channelSuffix()}` });
+  }
+
+  /**
+   * Broker-level order events for a specific investor
+   * (`order.broker.{marketType}.{investorId}.json`). `investorId` comes from
+   * {@link RestClient.getAccounts}.
+   */
+  subscribeBrokerOrderEvent(investorId: string, marketType: MarketType = 'STOCK'): this {
+    return this.subscribeChannel({
+      name: `order.broker.${marketType}.${investorId}${this.channelSuffix()}`,
+    });
+  }
+
+  /**
+   * Broker-level position events for a specific investor
+   * (`position.broker.{marketType}.{investorId}.json`).
+   */
+  subscribeBrokerPositionEvent(investorId: string, marketType: MarketType = 'STOCK'): this {
+    return this.subscribeChannel({
+      name: `position.broker.${marketType}.${investorId}${this.channelSuffix()}`,
+    });
   }
 
   /** Low-level: subscribe to raw channel spec(s). Escape hatch for any channel. */

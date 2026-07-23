@@ -39,10 +39,12 @@ Toàn bộ thư viện thuần **DNSE OpenAPI**, xác thực bằng **HMAC api-k
   (OHLC, secdef); gọi không key → `401 X-API-Key header required`. Không có REST
   endpoint public.
 - **Realtime** (`wss://ws-openapi.dnse.com.vn/v1/stream?encoding=json`) →
-  `MarketDataWsClient`. WebSocket **thuần** (lib `ws`), frame JSON. Auth handshake
-  gửi `{action:"auth", api_key, signature, timestamp, nonce}`, ký
+  `WebsocketClient` (alias cũ: `MarketDataWsClient`). WebSocket **thuần** (lib
+  `ws`), frame JSON. Auth handshake gửi
+  `{action:"auth", api_key, signature, timestamp, nonce}`, ký
   `HMAC-SHA256(secret, "{apiKey}:{timestamp}:{nonce}")` dạng **hex** — **dùng
-  cùng key/secret với REST**, KHÔNG cần login/JWT.
+  cùng key/secret với REST**, KHÔNG cần login/JWT. Xử lý cả market data lẫn
+  trading/tài khoản (orders/positions/account/order_event/position_event).
 
 LƯU Ý LỊCH SỬ: từng có bản dùng MQTT + JWT (hệ EntradeX/LightSpeed cũ) — đã bỏ
 hẳn vì OpenAPI có feed realtime riêng bằng chính key/secret. Đừng tái introduce
@@ -54,7 +56,7 @@ Entrade/MQTT trừ khi có lý do rõ ràng.
 src/
 ├── index.ts                 # public exports
 ├── RestClient.ts            # client REST chính (endpoint đã typed)
-├── MarketDataWsClient.ts    # realtime WebSocket OpenAPI (EventEmitter, lib ws)
+├── WebsocketClient.ts       # realtime WS OpenAPI: market data + trading (lib ws)
 ├── types/                   # request/response types theo domain
 │   ├── shared.ts            # enum: MarketType, OrderSide, OrderType, OtpType…
 │   ├── ws.ts                # MarketDataWsOptions, channel/message/event, boards
@@ -103,14 +105,16 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 ## Điểm chưa chốt
 
 - Protocol WS đã verify theo SDK Python chính thức (`dnse-tech/openapi-sdk`,
-  thư mục `python/dnse/websocket/`). Chưa chạy live với key thật.
-- Encoding msgpack chưa hỗ trợ (mới JSON). Realtime trading (order/position) qua
-  WS OpenAPI có hỗ trợ nhưng chưa build.
+  thư mục `python/dnse/websocket/` + `python/websocket-marketdata|trading/`).
+  Chưa chạy live với key thật.
+- Encoding msgpack chưa hỗ trợ (mới JSON).
 
 ## Trạng thái hiện tại
 
 - REST: đầy đủ endpoint theo SDK gốc (accounts, balances, loan packages, ppse,
   positions, orders read/write, history, corporate actions, OHLC, secdef, OTP →
   trading token).
-- WS: `MarketDataWsClient` thuần OpenAPI (ws + HMAC handshake) — xong, có test.
-- 20/20 test pass. Build sạch ra `dist/`.
+- WS: `WebsocketClient` thuần OpenAPI (ws + HMAC handshake) — market data
+  (ohlc/quote/trade/secdef/market_index) + trading/tài khoản (orders/positions/
+  account/order_event/position_event, có bản broker.*). Có test.
+- 22/22 test pass. Build sạch ra `dist/`.

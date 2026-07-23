@@ -6,10 +6,10 @@
  * Không cần login/JWT riêng — feed realtime ký HMAC bằng cùng cặp key/secret
  * như REST.
  */
-import { MarketDataWsClient } from '../src';
+import { WebsocketClient } from '../src';
 
 async function main() {
-  const ws = new MarketDataWsClient({
+  const ws = new WebsocketClient({
     apiKey: process.env.DNSE_API_KEY!,
     apiSecret: process.env.DNSE_API_SECRET!,
   });
