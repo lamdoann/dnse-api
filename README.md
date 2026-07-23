@@ -290,11 +290,18 @@ npm run lint
 
 ## Lộ trình (roadmap)
 
-- [x] `WebsocketClient` — realtime WS OpenAPI: market data + trading (HMAC, cùng key/secret)
-- [ ] Decode payload có schema (typed message cho ohlc/quote/trade/index)
-- [ ] Hỗ trợ encoding msgpack (hiện chỉ JSON)
-- [ ] Realtime trading (order/position) qua WS — OpenAPI có hỗ trợ
+Đã xong:
+- [x] REST đầy đủ (tài khoản, lệnh đọc/ghi, vị thế, lịch sử, corporate action, instruments, OHLC, secdef, OTP → trading token)
+- [x] `WebsocketClient` — realtime WS OpenAPI (HMAC, cùng key/secret)
+- [x] WS market data (ohlc/quote/trade/secdef/market_index)
+- [x] WS trading/tài khoản (orders/positions/account/order_event/position_event + bản broker.*)
+
+Chưa làm:
+- [ ] Decode payload WS có schema (typed message cho từng loại, thay vì `Record<string, unknown>`)
 - [ ] Theo dõi rate-limit từ response header
+- [ ] Chạy verify live với API key thật (protocol đã đối chiếu SDK chính thức, chưa test thực tế)
+
+> Encoding `msgpack`: đã cân nhắc, **không làm** — JSON đủ dùng.
 
 ## Miễn trừ trách nhiệm
 

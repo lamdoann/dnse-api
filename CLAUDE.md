@@ -107,7 +107,8 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 - Protocol WS đã verify theo SDK Python chính thức (`dnse-tech/openapi-sdk`,
   thư mục `python/dnse/websocket/` + `python/websocket-marketdata|trading/`).
   Chưa chạy live với key thật.
-- Encoding msgpack chưa hỗ trợ (mới JSON).
+- Encoding: chỉ JSON. Msgpack đã quyết **không làm** (JSON đủ) — đừng thêm lại
+  trừ khi user yêu cầu.
 
 ## Trạng thái hiện tại
 
