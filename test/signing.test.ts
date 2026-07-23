@@ -67,15 +67,16 @@ describe('RestClient dryRun', () => {
     expect(r.headers['X-Signature']).toContain('algorithm="hmac-sha256"');
   });
 
-  it('does not sign public requests', async () => {
-    const r = (await client.getOhlc('STOCK', {
-      symbol: 'HPG',
-      resolution: '1',
+  it('signs market-data requests too (OpenAPI signs everything)', async () => {
+    const r = (await client.getOhlc('DERIVATIVE', {
+      symbol: 'VN30F1M',
+      resolution: 'D',
       from: 1,
       to: 2,
     })) as DryRunResult;
-    expect(r.headers['X-Signature']).toBeUndefined();
-    expect(r.url).toContain('type=STOCK');
+    expect(r.headers['X-Signature']).toContain('keyId="k"');
+    expect(r.url).toContain('type=DERIVATIVE');
+    expect(r.url).toContain('symbol=VN30F1M');
   });
 
   it('attaches the trading-token header on order placement', async () => {

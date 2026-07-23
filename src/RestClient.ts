@@ -274,13 +274,16 @@ export class RestClient extends BaseRestClient {
   // Market data
   // ===================================================================
 
-  /** Security definition (board, ceiling/floor, lot size, ...). Public. */
+  /**
+   * Security definition (board, ceiling/floor, lot size, ...).
+   * Requires API key/secret — the OpenAPI gateway signs all requests.
+   */
   getSecurityDefinition(
     symbol: string,
     params?: GetSecurityDefinitionParams,
     options?: RequestOptions,
   ) {
-    return this.get<SecurityDefinition | DryRunResult>(
+    return this.getPrivate<SecurityDefinition | DryRunResult>(
       fillPathParams('/price/{symbol}/secdef', { symbol }),
       params ? { ...params } : undefined,
       options,
@@ -288,11 +291,12 @@ export class RestClient extends BaseRestClient {
   }
 
   /**
-   * OHLC candles (TradingView-style parallel arrays). Public.
+   * OHLC candles (TradingView-style parallel arrays).
+   * Requires API key/secret — the OpenAPI gateway signs all requests.
    * @param market `STOCK`, `DERIVATIVE` or `INDEX`.
    */
   getOhlc(market: OhlcMarket, params: GetOhlcParams, options?: RequestOptions) {
-    return this.get<OhlcResponse | DryRunResult>(
+    return this.getPrivate<OhlcResponse | DryRunResult>(
       '/price/ohlc',
       { type: market, ...params },
       options,

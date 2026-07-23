@@ -34,6 +34,9 @@ npm run clean      # rimraf dist
 
 1. **OpenAPI** (`openapi.dnse.com.vn`) — dùng cho `RestClient`. Auth = **HMAC
    HTTP-signature** (api-key + secret). Đây là phần chính, đã build đầy đủ.
+   **Mọi endpoint đều cần key & được ký** — kể cả dữ liệu giá (OHLC, secdef);
+   gọi không có key → `401 X-API-Key header required`. Không có REST endpoint
+   public.
 2. **LightSpeed / EntradeX** — dùng cho market data realtime. Auth = **JWT**
    (`investorId` + `token`), lấy qua `EntradeAuthClient`. KHÁC hoàn toàn HMAC.
 

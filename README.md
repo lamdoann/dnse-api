@@ -32,16 +32,13 @@ const client = new RestClient({
 });
 ```
 
-Tạo client **không cần credentials** để chỉ gọi các endpoint public (OHLC, security definition):
-
-```ts
-const publicClient = new RestClient();
-```
+> Lưu ý: OpenAPI ký **mọi** request (kể cả dữ liệu giá OHLC / security
+> definition), nên đều cần `apiKey` + `apiSecret`. Không có endpoint REST public.
 
 ## Dùng nhanh
 
 ```ts
-// Dữ liệu thị trường (public)
+// Dữ liệu thị trường (cũng cần key — OpenAPI ký mọi request)
 const ohlc = await client.getOhlc('STOCK', {
   symbol: 'HPG',
   resolution: '1',
@@ -151,7 +148,7 @@ try {
 | `cancelOrder(accountNo, orderId, marketType, opts)` | Hủy lệnh | `DELETE /accounts/{accountNo}/orders/{orderId}` |
 | `closePosition(accountNo, positionId, marketType, payload, opts)` | Đóng vị thế | `POST /accounts/{accountNo}/positions/{positionId}/close` |
 
-### Dữ liệu thị trường (public)
+### Dữ liệu thị trường (cần key)
 | Method | Mô tả | Endpoint |
 | --- | --- | --- |
 | `getSecurityDefinition(symbol, params?)` | Thông tin mã (trần/sàn/lô…) | `GET /price/{symbol}/secdef` |
