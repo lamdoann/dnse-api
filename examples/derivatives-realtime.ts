@@ -46,16 +46,22 @@ async function main() {
   const res = await rest.getInstruments({ limit: 1000 });
   const all = toInstrumentList(res);
   const derivatives = all.filter(isDerivative);
-  const symbols = derivatives.map(tradingSymbol);
 
-  if (symbols.length === 0) {
+  if (derivatives.length === 0) {
     console.error(
       'Không tìm thấy symbol phái sinh. In thử vài instrument để chỉnh isDerivative():',
     );
     console.error(all.slice(0, 5));
     process.exit(1);
   }
-  console.log(`Tìm thấy ${symbols.length} mã phái sinh:`, symbols.join(', '));
+
+  // ⚠️ LƯU Ý (đã verify live): kênh OHLC khớp theo TICKER (symbolType, vd
+  // VN30F1M), còn kênh tick/quote/secdef khớp theo MÃ KRX (symbol, vd
+  // 41I1G8000). Nên phải subscribe bằng đúng dạng mã cho từng kênh.
+  const tickers = derivatives.map(tradingSymbol); // cho OHLC
+  const krxCodes = derivatives.map((d) => d.symbol); // cho trade/quote
+  const krxToTicker = new Map(derivatives.map((d) => [d.symbol, tradingSymbol(d)]));
+  console.log(`Tìm thấy ${derivatives.length} mã phái sinh:`, tickers.join(', '));
 
   // --- 2) & 3) Subscribe trades + candlestick cho mỗi symbol ----------
   const ws = new WebsocketClient({
@@ -65,12 +71,15 @@ async function main() {
 
   ws.on('open', () => {
     console.log('WS đã kết nối & xác thực — subscribe...');
-    ws.subscribeTrade(symbols); // 2) tick khớp lệnh cho mỗi mã
-    ws.subscribeOhlc(symbols, OHLC_RESOLUTION); // 3) nến cho mỗi mã
-    console.log(`Đã subscribe trade + ohlc(${OHLC_RESOLUTION}) cho ${symbols.length} mã.`);
+    ws.subscribeTrade(krxCodes); // 2) tick khớp lệnh (dùng mã KRX)
+    ws.subscribeOhlc(tickers, OHLC_RESOLUTION); // 3) nến (dùng ticker)
+    console.log(`Đã subscribe trade + ohlc(${OHLC_RESOLUTION}) cho ${derivatives.length} mã.`);
   });
 
-  ws.on('trade', (m) => console.log('TRADE', m.data.symbol, m.data.matchPrice, 'x', m.data.matchQtty));
+  // trade trả về symbol = mã KRX -> map ngược về ticker cho dễ đọc.
+  ws.on('trade', (m) =>
+    console.log('TRADE', krxToTicker.get(m.data.symbol) ?? m.data.symbol, m.data.matchPrice, 'x', m.data.matchQtty),
+  );
   ws.on('ohlc', (m) => console.log('OHLC ', m.data.symbol, m.data.close, 'vol', m.data.volume));
 
   ws.on('reconnected', () => console.log('reconnected — đã re-subscribe'));

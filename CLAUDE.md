@@ -124,9 +124,12 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
   `PriceLevel{price,qtty}`). secdef/order/position/account gõ theo models.py,
   đánh dấu ⚠️ chưa verify wire. Mọi payload có `[key:string]:unknown` nên field
   lạ không vỡ. Per-type event trả `MarketDataMessage<T>` đúng kiểu.
-- Board phái sinh: `subscribeTrade/Quote` cho mã phái sinh (vd VN30F1M) KHÔNG
-  về dữ liệu trên các board cổ phiếu mặc định (`DEFAULT_BOARDS`); ohlc thì OK.
-  Chưa tìm ra board đúng cho phái sinh — cần verify.
+- DẠNG MÃ theo kênh (ĐÃ VERIFY LIVE): kênh **ohlc** khớp theo **ticker**
+  (`symbolType`, vd `VN30F1M`); kênh **tick/quote/secdef** khớp theo **mã KRX**
+  (`symbol`, vd `41I1G8000`). Cổ phiếu thì hai mã trùng nhau nên không lộ; phái
+  sinh thì KHÁC → phải subscribe đúng dạng. Trade/quote phái sinh về trên board
+  `G1` (đã có trong `DEFAULT_BOARDS`) — trước tưởng sai board, thực ra sai mã.
+  Xem `examples/derivatives-realtime.ts` (map KRX↔ticker).
 - Encoding: chỉ JSON. Msgpack đã quyết **không làm** (JSON đủ) — đừng thêm lại
   trừ khi user yêu cầu.
 

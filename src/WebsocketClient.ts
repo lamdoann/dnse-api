@@ -184,26 +184,46 @@ export class WebsocketClient extends EventEmitter {
     return `.${ENCODING}`;
   }
 
-  /** Subscribe to OHLC candles for symbols at a resolution. */
+  /**
+   * Subscribe to OHLC candles for symbols at a resolution.
+   *
+   * NOTE (verified live): the OHLC channel matches on the FRIENDLY ticker
+   * (e.g. `VN30F1M`, `HPG`) — i.e. an instrument's `symbolType`. This differs
+   * from {@link subscribeTrade}/{@link subscribeQuote}/{@link subscribeSecDef},
+   * which match on the raw KRX code (`symbol`, e.g. `41I1G8000`). For stocks
+   * the two are identical; for derivatives they differ.
+   */
   subscribeOhlc(symbols: string[], resolution: OhlcResolution): this {
     return this.subscribeChannel({ name: `ohlc.${resolution}${this.channelSuffix()}`, symbols });
   }
 
-  /** Subscribe to trade (tick) data for symbols across the given boards. */
+  /**
+   * Subscribe to trade (tick) data for symbols across the given boards.
+   *
+   * NOTE (verified live): match on the raw KRX code (`symbol`, e.g.
+   * `41I1G8000`), NOT the friendly ticker. Derivative ticks arrive on board
+   * `G1` (already in {@link DEFAULT_BOARDS}).
+   */
   subscribeTrade(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
     return this.subscribeChannel(
       boards.map((b) => ({ name: `tick.${b}${this.channelSuffix()}`, symbols })),
     );
   }
 
-  /** Subscribe to top-of-book quotes for symbols across the given boards. */
+  /**
+   * Subscribe to top-of-book quotes for symbols across the given boards.
+   * Like {@link subscribeTrade}, match on the raw KRX code (`symbol`).
+   */
   subscribeQuote(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
     return this.subscribeChannel(
       boards.map((b) => ({ name: `top_price.${b}${this.channelSuffix()}`, symbols })),
     );
   }
 
-  /** Subscribe to security-definition updates for symbols across boards. */
+  /**
+   * Subscribe to security-definition updates for symbols across boards.
+   * Like {@link subscribeTrade}, match on the raw KRX code (`symbol`).
+   */
   subscribeSecDef(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
     return this.subscribeChannel(
       boards.map((b) => ({ name: `security_definition.${b}${this.channelSuffix()}`, symbols })),

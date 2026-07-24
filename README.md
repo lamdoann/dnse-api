@@ -254,6 +254,8 @@ ws.connect();
 
 `boards` mặc định là toàn bộ bảng KRX (`G1,G3,G4,G7,T1,T2,T3,T4,T6`) — truyền mảng để thu hẹp. `investorId` lấy từ `getAccounts()`. Message route theo field `T` (t=trade, q=quote, b=ohlc, mi=market_index, sd=security_definition, do/eo=order_event, dp/ep=position_event, a=account…).
 
+> ⚠️ **Dạng mã theo kênh** (đã verify live): `subscribeOhlc` khớp theo **ticker** (`symbolType`, vd `VN30F1M`); còn `subscribeTrade`/`subscribeQuote`/`subscribeSecDef` khớp theo **mã KRX** (`symbol`, vd `41I1G8000`). Cổ phiếu hai mã trùng nên không lộ; **phái sinh thì khác nhau** — xem `examples/derivatives-realtime.ts`.
+
 ---
 
 ## Kiến trúc
@@ -319,9 +321,10 @@ npm run lint
 - [x] Verify live REST + WS market data với key thật (getAccounts/instruments/ohlc, WS ohlc/quote/trade/index)
 - [x] Typed payload WS: `ohlc`/`quote`/`trade`/`market_index` gõ kiểu từ wire thật; secdef/order/position/account theo SDK models (đánh dấu ⚠️ chưa verify wire)
 
+- [x] Realtime phái sinh: trade + ohlc verify live (mã KRX cho tick/quote, ticker cho ohlc)
+
 Chưa làm:
 - [ ] Verify wire cho các event chưa gõ chắc (secdef, order_event, position_event, account) — cần dữ liệu thật trong phiên có phát sinh
-- [ ] Board phái sinh cho `subscribeTrade/Quote` (mã phái sinh không về trên các board cổ phiếu mặc định)
 - [ ] Theo dõi rate-limit từ response header
 - [ ] Verify live phần đặt/sửa/hủy lệnh (cần trading-token qua OTP)
 
