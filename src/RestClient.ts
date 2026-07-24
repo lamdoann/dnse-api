@@ -307,7 +307,8 @@ export class RestClient extends BaseRestClient {
 
   /**
    * OHLC candles (TradingView-style parallel arrays). A `turnover` array
-   * (`v[i] * c[i]`, giá trị giao dịch) is computed client-side and added.
+   * (giá trị giao dịch = `v[i] * typicalPrice[i]`, với typical price
+   * `(h+l+c)/3`) is computed client-side and added.
    * Requires API key/secret — the OpenAPI gateway signs all requests.
    * @param market `STOCK`, `DERIVATIVE` or `INDEX`.
    */
@@ -321,8 +322,17 @@ export class RestClient extends BaseRestClient {
       { type: market, ...params },
       options,
     );
-    if (res && !('dryRun' in res) && Array.isArray(res.c) && Array.isArray(res.v)) {
-      res.turnover = res.c.map((close, i) => close * (res.v[i] ?? 0));
+    if (
+      res &&
+      !('dryRun' in res) &&
+      Array.isArray(res.h) &&
+      Array.isArray(res.l) &&
+      Array.isArray(res.c) &&
+      Array.isArray(res.v)
+    ) {
+      res.turnover = res.c.map(
+        (close, i) => (res.v[i] ?? 0) * (((res.h[i] ?? 0) + (res.l[i] ?? 0) + close) / 3),
+      );
     }
     return res;
   }

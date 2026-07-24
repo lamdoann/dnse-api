@@ -383,11 +383,22 @@ export class WebsocketClient extends EventEmitter {
   private handleData(msg: Record<string, unknown>): void {
     const rawType = msg.T as string;
     const type = WS_MESSAGE_TYPES[rawType] || rawType;
-    // Derive turnover (giá trị giao dịch) = volume * close for ohlc frames.
+    // Derive turnover (giá trị giao dịch) = volume * typical price, where
+    // typical price = (high + low + close) / 3.
     if (type === 'ohlc' || type === 'ohlc_closed') {
-      const { volume, close } = msg as { volume?: unknown; close?: unknown };
-      if (typeof volume === 'number' && typeof close === 'number') {
-        msg.turnover = volume * close;
+      const { volume, high, low, close } = msg as {
+        volume?: unknown;
+        high?: unknown;
+        low?: unknown;
+        close?: unknown;
+      };
+      if (
+        typeof volume === 'number' &&
+        typeof high === 'number' &&
+        typeof low === 'number' &&
+        typeof close === 'number'
+      ) {
+        msg.turnover = volume * ((high + low + close) / 3);
       }
     }
     const decoded: MarketDataMessage = { type, rawType, data: msg };
