@@ -1,7 +1,7 @@
 {
   "name": "dnse-api",
   "version": "0.1.0",
-  "description": "Node.js & TypeScript SDK for the DNSE (Dòng Nắng Sài Gòn) OpenAPI: trading, accounts, orders & market data with HMAC HTTP-signature auth.",
+  "description": "Node.js & TypeScript SDK for the DNSE OpenAPI: trading, accounts, orders & market data with HMAC HTTP-signature auth.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -48,7 +48,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/your-org/dnse-api.git"
+    "url": "git+https://github.com/lamdoann/dnse-api.git"
   },
   "engines": {
     "node": ">=18"
