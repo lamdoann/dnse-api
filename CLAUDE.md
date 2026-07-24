@@ -106,12 +106,18 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 - **`dryRun`** (toàn cục hoặc từng call) trả về mô tả request thay vì gọi mạng —
   dùng để test/inspect. Test dựa nhiều vào cái này.
 - **Lỗi** luôn chuẩn hóa thành `DNSEAPIError` (`status`, `body`, `request`).
-- **WS**: subscribe qua helper (`subscribeOhlc/Quote/Trade/SecDef/MarketIndex`)
-  hoặc `subscribeChannel(spec)` thô. Channel name: `<type>.<param>.json` (ohlc
-  dùng resolution; trade/quote/secdef dùng board, mặc định toàn bộ
-  `DEFAULT_BOARDS`; market_index dùng mã chỉ số). Tự reconnect → re-auth →
-  re-subscribe; message route theo field `T`; phát `message` + event theo type.
-  Hiện chỉ encoding JSON (msgpack chưa làm).
+- **WS**: subscribe qua helper hoặc `subscribeChannel(spec)` thô. Channel name
+  `<type>.<param>.json`. ĐỦ BỘ market data: `ohlc` / `ohlc_closed`
+  (`.{resolution}`), `tick` / `tick_extra` / `top_price` / `expected_price` /
+  `security_definition` (`.{board}`, mặc định `DEFAULT_BOARDS`), `market_index`
+  / `estimated_market_index` (`.{index}`), `foreign` (`.{board}`, mặc định
+  `*`), `session` (`.{productGroupId}.{board}`, board mặc định `*`).
+  Tự reconnect → re-auth → re-subscribe; route theo field `T`; phát `message`
+  + event theo type. Chỉ encoding JSON.
+- Resolution hợp lệ (VERIFY LIVE): `1,3,5,15,30,1H,1D,1W`. `60`, `1M`, `D` trả
+  RỖNG — đừng dùng.
+- WS: kết nối tối đa 8 giờ; server gửi PING mỗi 3 phút, client phải PONG trong
+  1 phút (client đã tự xử lý). Symbol phải VIẾT HOA.
 
 ## Điểm chưa chốt
 

@@ -234,11 +234,19 @@ ws.connect();
 | Method | Channel | Dữ liệu |
 | --- | --- | --- |
 | `subscribeOhlc(symbols, resolution)` | `ohlc.{resolution}.json` | Nến realtime |
+| `subscribeOhlcClosed(symbols, resolution)` | `ohlc_closed.{resolution}.json` | Nến đã chốt |
 | `subscribeQuote(symbols, boards?)` | `top_price.{board}.json` | Sổ lệnh bid/ask |
 | `subscribeTrade(symbols, boards?)` | `tick.{board}.json` | Tick khớp lệnh |
+| `subscribeTradeExtra(symbols, boards?)` | `tick_extra.{board}.json` | Tick + giá bình quân |
+| `subscribeExpectedPrice(symbols, boards?)` | `expected_price.{board}.json` | Giá dự kiến khớp (ATO/ATC) |
 | `subscribeSecDef(symbols, boards?)` | `security_definition.{board}.json` | Định nghĩa mã |
 | `subscribeMarketIndex(indices)` | `market_index.{index}.json` | Chỉ số (VNINDEX, VN30…) |
+| `subscribeEstimatedMarketIndex(indices)` | `estimated_market_index.{index}.json` | Chỉ số ước tính (VN30 estimated) |
+| `subscribeForeign(symbols, boardId?)` | `foreign.{board}.json` | Giao dịch khối ngoại |
+| `subscribeSession(productGroupId, boardId?)` | `session.{grp}.{board}.json` | Trạng thái/sự kiện phiên |
 | `subscribeChannel(spec)` | *(bất kỳ)* | Escape hatch cho channel thô |
+
+Resolution hợp lệ (verify live): `1`, `3`, `5`, `15`, `30`, `1H`, `1D`, `1W` — `60`/`1M`/`D` trả rỗng. `subscribeForeign`/`subscribeSession` mặc định `boardId = '*'` (mọi board).
 
 ### Các method subscribe — trading & tài khoản (private)
 

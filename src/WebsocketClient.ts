@@ -230,11 +230,68 @@ export class WebsocketClient extends EventEmitter {
     );
   }
 
+  /** Subscribe to closed (finalised) OHLC candles at a resolution. */
+  subscribeOhlcClosed(symbols: string[], resolution: OhlcResolution): this {
+    return this.subscribeChannel({
+      name: `ohlc_closed.${resolution}${this.channelSuffix()}`,
+      symbols,
+    });
+  }
+
+  /**
+   * Subscribe to extended trade data (side, average price) across boards.
+   * Like {@link subscribeTrade}, match on the raw KRX code (`symbol`).
+   */
+  subscribeTradeExtra(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
+    return this.subscribeChannel(
+      boards.map((b) => ({ name: `tick_extra.${b}${this.channelSuffix()}`, symbols })),
+    );
+  }
+
+  /**
+   * Subscribe to expected (indicative) matching price — useful during the
+   * ATO/ATC periodic auctions. Match on the raw KRX code (`symbol`).
+   */
+  subscribeExpectedPrice(symbols: string[], boards: readonly string[] = DEFAULT_BOARDS): this {
+    return this.subscribeChannel(
+      boards.map((b) => ({ name: `expected_price.${b}${this.channelSuffix()}`, symbols })),
+    );
+  }
+
   /** Subscribe to one or more market indices (e.g. `VNINDEX`, `VN30`, `HNXINDEX`). */
   subscribeMarketIndex(indices: string[]): this {
     return this.subscribeChannel(
       indices.map((i) => ({ name: `market_index.${i}${this.channelSuffix()}` })),
     );
+  }
+
+  /** Subscribe to estimated (real-time projected) index values, e.g. `VN30`. */
+  subscribeEstimatedMarketIndex(indices: string[]): this {
+    return this.subscribeChannel(
+      indices.map((i) => ({ name: `estimated_market_index.${i}${this.channelSuffix()}` })),
+    );
+  }
+
+  /**
+   * Subscribe to foreign-investor trading (khối ngoại) for symbols.
+   * @param boardId board filter — defaults to `*` (all boards).
+   */
+  subscribeForeign(symbols: string[], boardId = '*'): this {
+    return this.subscribeChannel({
+      name: `foreign.${boardId}${this.channelSuffix()}`,
+      symbols,
+    });
+  }
+
+  /**
+   * Subscribe to trading-session events (mở/đóng cửa, khớp lệnh liên tục…).
+   * @param productGroupId product group id (`tscProdGrpId`).
+   * @param boardId board filter — defaults to `*` (all boards).
+   */
+  subscribeSession(productGroupId: string, boardId = '*'): this {
+    return this.subscribeChannel({
+      name: `session.${productGroupId}.${boardId}${this.channelSuffix()}`,
+    });
   }
 
   // ----- Private: trading & account (require api key/secret) -------------

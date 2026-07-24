@@ -169,6 +169,92 @@ export interface MarketIndexData extends WsPayloadBase {
   multicastReceiveTime?: WsTimestamp;
 }
 
+/**
+ * `trade_extra` (T=`te`) — tick kèm giá bình quân. Verified live: dùng
+ * `matchPrice`/`matchQtty` giống `trade` (KHÔNG phải `price`/`quantity`).
+ */
+export interface TradeExtraData extends WsPayloadBase {
+  symbol: string;
+  marketId?: string;
+  boardId?: string;
+  isin?: string;
+  matchPrice: number;
+  matchQtty: number;
+  /** Giá bình quân lũy kế trong phiên. */
+  avgPrice?: number;
+  /** Giá trị giao dịch lũy kế — đơn vị tỷ VND. */
+  grossTradeAmount?: number;
+  totalVolumeTraded?: number;
+  openPrice?: number;
+  highestPrice?: number;
+  lowestPrice?: number;
+  /** Bên chủ động khớp. */
+  side?: number;
+  tradingSessionId?: string;
+  time?: WsTimestamp;
+  multicastReceiveTime?: WsTimestamp;
+}
+
+/** `expected_price` (T=`e`) — giá dự kiến khớp. ⚠️ chưa verify wire. */
+export interface ExpectedPriceData extends WsPayloadBase {
+  symbol: string;
+  marketId?: string;
+  boardId?: string;
+  isin?: string;
+  closePrice?: number;
+  expectedTradePrice?: number;
+  expectedTradeQuantity?: number;
+  time?: WsTimestamp;
+}
+
+/** `estimated_market_index` (T=`emi`) — chỉ số ước tính. ⚠️ chưa verify wire. */
+export interface EstimatedMarketIndexData extends WsPayloadBase {
+  indexName: string;
+  valueIndexes?: number;
+  changedValue?: number;
+  changedRatio?: number;
+  totalVolumeTraded?: number;
+  grossTradeAmount?: number;
+  fluctuationUpIssueCount?: number;
+  fluctuationDownIssueCount?: number;
+  fluctuationSteadinessIssueCount?: number;
+  time?: WsTimestamp;
+}
+
+/** `foreign` (T=`f`) — giao dịch khối ngoại. ⚠️ chưa verify wire. */
+export interface ForeignInvestorData extends WsPayloadBase {
+  symbol: string;
+  marketId?: string;
+  boardId?: string;
+  tradingSessionId?: string;
+  foreignInvestorTypeCode?: string;
+  buyVolume?: number;
+  buyTradedAmount?: number;
+  sellVolume?: number;
+  sellTradedAmount?: number;
+  totalBuyVolume?: number;
+  totalBuyTradedAmount?: number;
+  totalSellVolume?: number;
+  totalSellTradedAmount?: number;
+  /** Room ngoại còn lại. */
+  foreignerBuyPossibleQuantity?: number;
+  foreignerOrderLimitQuantity?: number;
+  transactTime?: WsTimestamp;
+}
+
+/** `session` (T=`s`) — trạng thái/sự kiện phiên. ⚠️ chưa verify wire. */
+export interface SessionData extends WsPayloadBase {
+  marketId?: string;
+  boardId?: string;
+  /** Mã sự kiện phiên. */
+  eventId?: string;
+  /** Mã phiên hiện tại (vd `40` = khớp lệnh liên tục). */
+  tradingSessionId?: number | string;
+  /** Product group id. */
+  tscProdGrpId?: string;
+  time?: WsTimestamp;
+}
+
 /** `security_definition` (T=`sd`). ⚠️ theo SDK models — chưa verify wire. */
 export interface SecurityDefinitionMessage extends WsPayloadBase {
   symbol: string;
@@ -266,6 +352,11 @@ export interface MarketDataWsEvents {
   trade: (msg: MarketDataMessage<TradeData>) => void;
   security_definition: (msg: MarketDataMessage<SecurityDefinitionMessage>) => void;
   market_index: (msg: MarketDataMessage<MarketIndexData>) => void;
+  trade_extra: (msg: MarketDataMessage<TradeExtraData>) => void;
+  expected_price: (msg: MarketDataMessage<ExpectedPriceData>) => void;
+  estimated_market_index: (msg: MarketDataMessage<EstimatedMarketIndexData>) => void;
+  foreign: (msg: MarketDataMessage<ForeignInvestorData>) => void;
+  session: (msg: MarketDataMessage<SessionData>) => void;
   // Trading / account per-type events (private).
   order_event: (msg: MarketDataMessage<OrderEventData>) => void;
   position_event: (msg: MarketDataMessage<PositionEventData>) => void;

@@ -86,6 +86,24 @@ describe('MarketDataWsClient (no live socket)', () => {
     ]);
   });
 
+  it('builds the extra market-data channels', () => {
+    const ws = new WebsocketClient({ apiKey: 'k', apiSecret: 's' });
+    ws.subscribeOhlcClosed(['VN30F1M'], '1H');
+    ws.subscribeTradeExtra(['HPG'], ['G1']);
+    ws.subscribeExpectedPrice(['HPG'], ['G1']);
+    ws.subscribeEstimatedMarketIndex(['VN30']);
+    ws.subscribeForeign(['HPG']); // board mặc định '*'
+    ws.subscribeSession('P1', 'G1');
+    expect(ws.getChannels()).toEqual([
+      'ohlc_closed.1H.json',
+      'tick_extra.G1.json',
+      'expected_price.G1.json',
+      'estimated_market_index.VN30.json',
+      'foreign.*.json',
+      'session.P1.G1.json',
+    ]);
+  });
+
   it('MarketDataWsClient is an alias of WebsocketClient', () => {
     expect(MarketDataWsClient).toBe(WebsocketClient);
   });

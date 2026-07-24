@@ -26,16 +26,8 @@ export type OrderType = 'LO' | 'MP' | 'ATO' | 'ATC' | 'MOK' | 'MAK' | 'PLO';
 export type OtpType = 'email' | 'smart';
 
 /**
- * Candle resolution for OHLC queries. Minutes as `'1'..'60'`, and day/week/
- * month as `'1D'`/`'1W'`/`'1M'` (verified live — plain `'D'` returns no data).
+ * Candle resolution for OHLC (REST + WS). Verified live: `'60'`, `'D'` and
+ * `'1M'` return no data — use `'1H'` for hourly and `'1D'`/`'1W'` for
+ * day/week.
  */
-export type OhlcResolution =
-  | '1'
-  | '3'
-  | '5'
-  | '15'
-  | '30'
-  | '60'
-  | '1D'
-  | '1W'
-  | '1M';
+export type OhlcResolution = '1' | '3' | '5' | '15' | '30' | '1H' | '1D' | '1W';
