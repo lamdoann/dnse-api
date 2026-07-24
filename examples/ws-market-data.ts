@@ -21,9 +21,14 @@ async function main() {
     ws.subscribeMarketIndex(['VNINDEX', 'VN30']); // chỉ số
   });
 
-  ws.on('ohlc', (m) => console.log('OHLC   ', m.data));
-  ws.on('quote', (m) => console.log('QUOTE  ', m.data));
-  ws.on('market_index', (m) => console.log('INDEX  ', m.data));
+  // Payload đã gõ kiểu theo từng loại (autocomplete + kiểm tra field khi compile):
+  ws.on('ohlc', (m) => console.log('OHLC ', m.data.symbol, m.data.close, 'vol', m.data.volume));
+  ws.on('quote', (m) =>
+    console.log('QUOTE', m.data.symbol, 'bid', m.data.bid[0]?.price, 'ask', m.data.offer[0]?.price),
+  );
+  ws.on('market_index', (m) =>
+    console.log('INDEX', m.data.indexName, m.data.valueIndexes, `(${m.data.changedRatio}%)`),
+  );
 
   // Hoặc nghe tất cả:
   // ws.on('message', (m) => console.log(m.type, m.data));

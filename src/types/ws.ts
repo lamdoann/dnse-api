@@ -74,7 +74,160 @@ export const WS_MESSAGE_TYPES: Record<string, string> = {
   ep: 'position_event',
 };
 
-/** A decoded realtime data frame. */
+// ===================================================================
+// Typed message payloads
+//
+// Fields for `ohlc`, `quote`, `trade`, `market_index` are typed from LIVE
+// wire captures. The rest follow the official Python SDK models and are marked
+// ⚠️ (chưa verify wire). Every payload keeps an index signature so extra /
+// unknown fields never break typing and stay forward-compatible.
+// ===================================================================
+
+/** Wire timestamp used by several message types: seconds + nanoseconds. */
+export interface WsTimestamp {
+  Seconds: number;
+  Nanos: number;
+}
+
+/** One order-book level. */
+export interface PriceLevel {
+  price: number;
+  qtty: number;
+}
+
+interface WsPayloadBase {
+  /** Raw type discriminator echoed in the frame. */
+  T?: string;
+  [key: string]: unknown;
+}
+
+/** `ohlc` (T=`b`) / `ohlc_closed` (T=`bc`) — verified live. */
+export interface OhlcData extends WsPayloadBase {
+  symbol: string;
+  resolution: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  /** Candle open time — epoch seconds (a plain number for ohlc). */
+  time: number;
+  lastUpdated?: number;
+  /** Market type, e.g. `DERIVATIVE`. */
+  type?: string;
+}
+
+/** `quote` (T=`q`) — top-of-book bid/offer. Verified live. */
+export interface QuoteData extends WsPayloadBase {
+  symbol: string;
+  marketId: string;
+  boardId: string;
+  isin?: string;
+  bid: PriceLevel[];
+  offer: PriceLevel[];
+  totalBidQtty?: number;
+  totalOfferQtty?: number;
+  time?: WsTimestamp;
+  multicastReceiveTime?: WsTimestamp;
+}
+
+/** `trade` (T=`t`) — matched tick. Verified live. */
+export interface TradeData extends WsPayloadBase {
+  symbol: string;
+  marketId: string;
+  boardId: string;
+  isin?: string;
+  matchPrice: number;
+  matchQtty: number;
+  totalVolumeTraded: number;
+  grossTradeAmount: number;
+  openPrice: number;
+  highestPrice: number;
+  lowestPrice: number;
+  tradingSessionId?: string;
+  time?: WsTimestamp;
+  multicastReceiveTime?: WsTimestamp;
+}
+
+/** `market_index` (T=`mi`). Verified live. */
+export interface MarketIndexData extends WsPayloadBase {
+  indexName: string;
+  valueIndexes: number;
+  changedValue: number;
+  changedRatio: number;
+  priorValueIndexes?: number;
+  highestValueIndexes?: number;
+  lowestValueIndexes?: number;
+  totalVolumeTraded?: number;
+  grossTradeAmount?: number;
+  marketId?: string;
+  marketIndexClass?: string;
+  indexTypeCode?: string;
+  currencyCode?: string;
+  tradingSessionId?: string;
+  transactTime?: WsTimestamp;
+  multicastReceiveTime?: WsTimestamp;
+}
+
+/** `security_definition` (T=`sd`). ⚠️ theo SDK models — chưa verify wire. */
+export interface SecurityDefinitionMessage extends WsPayloadBase {
+  symbol: string;
+  marketId?: string;
+  boardId?: string;
+  isin?: string;
+  securityGroupId?: string;
+  basicPrice?: number;
+  ceilingPrice?: number;
+  floorPrice?: number;
+  openInterestQuantity?: number;
+  securityStatus?: string;
+}
+
+/** `order_event` (T=`do`/`eo`). ⚠️ theo SDK models — chưa verify wire. */
+export interface OrderEventData extends WsPayloadBase {
+  id: string;
+  accountNo: string;
+  symbol: string;
+  side: string;
+  price: number;
+  averagePrice?: number;
+  quantity: number;
+  fillQuantity?: number;
+  leaveQuantity?: number;
+  canceledQuantity?: number;
+  orderType: string;
+  orderStatus: string;
+  loanPackageId?: number;
+  marketType?: string;
+  createdDate?: string;
+  modifiedDate?: string;
+}
+
+/** `position_event` (T=`dp`/`ep`). ⚠️ theo SDK models — chưa verify wire. */
+export interface PositionEventData extends WsPayloadBase {
+  id: number;
+  accountNo: string;
+  symbol: string;
+  side: string;
+  status?: string;
+  costPrice?: number;
+  marketPrice?: number;
+  breakEvenPrice?: number;
+  openQuantity?: number;
+  accumulateQuantity?: number;
+  closedQuantity?: number;
+  marketType?: string;
+}
+
+/** `account` (T=`a`). ⚠️ theo SDK models — chưa verify wire. */
+export interface AccountUpdateData extends WsPayloadBase {
+  cash?: number;
+  buyingPower?: number;
+  portfolioValue?: number;
+  equity?: number;
+}
+
+/** A decoded realtime data frame. `T` is narrowed per event (see events). */
 export interface MarketDataMessage<T = Record<string, unknown>> {
   /** Friendly event name (e.g. `ohlc`, `quote`, `trade`). */
   type: string;
@@ -104,16 +257,17 @@ export interface MarketDataWsEvents {
   reconnected: () => void;
   /** Transport / protocol / auth error. */
   error: (err: Error) => void;
-  /** Any decoded data frame. */
+  /** Any decoded data frame (payload untyped — use per-type events for schema). */
   message: (msg: MarketDataMessage) => void;
-  // Market-data per-type events.
-  ohlc: (msg: MarketDataMessage) => void;
-  quote: (msg: MarketDataMessage) => void;
-  trade: (msg: MarketDataMessage) => void;
-  security_definition: (msg: MarketDataMessage) => void;
-  market_index: (msg: MarketDataMessage) => void;
+  // Market-data per-type events — payloads typed.
+  ohlc: (msg: MarketDataMessage<OhlcData>) => void;
+  ohlc_closed: (msg: MarketDataMessage<OhlcData>) => void;
+  quote: (msg: MarketDataMessage<QuoteData>) => void;
+  trade: (msg: MarketDataMessage<TradeData>) => void;
+  security_definition: (msg: MarketDataMessage<SecurityDefinitionMessage>) => void;
+  market_index: (msg: MarketDataMessage<MarketIndexData>) => void;
   // Trading / account per-type events (private).
-  order_event: (msg: MarketDataMessage) => void;
-  position_event: (msg: MarketDataMessage) => void;
-  account: (msg: MarketDataMessage) => void;
+  order_event: (msg: MarketDataMessage<OrderEventData>) => void;
+  position_event: (msg: MarketDataMessage<PositionEventData>) => void;
+  account: (msg: MarketDataMessage<AccountUpdateData>) => void;
 }

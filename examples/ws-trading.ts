@@ -25,9 +25,14 @@ async function main() {
     ws.subscribePositionEvent('DERIVATIVE'); // sự kiện vị thế phái sinh
   });
 
-  ws.on('order_event', (m) => console.log('ORDER   ', m.data));
-  ws.on('position_event', (m) => console.log('POSITION', m.data));
-  ws.on('account', (m) => console.log('ACCOUNT ', m.data));
+  // Payload đã gõ kiểu (order/position theo SDK models — chưa verify wire):
+  ws.on('order_event', (m) =>
+    console.log('ORDER   ', m.data.symbol, m.data.side, m.data.orderStatus, m.data.fillQuantity),
+  );
+  ws.on('position_event', (m) =>
+    console.log('POSITION', m.data.symbol, m.data.side, 'open', m.data.openQuantity),
+  );
+  ws.on('account', (m) => console.log('ACCOUNT ', 'cash', m.data.cash, 'equity', m.data.equity));
 
   // Bắt tất cả để quan sát:
   // ws.on('message', (m) => console.log(m.type, m.data));

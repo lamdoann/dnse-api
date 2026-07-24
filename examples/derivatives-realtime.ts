@@ -70,8 +70,8 @@ async function main() {
     console.log(`Đã subscribe trade + ohlc(${OHLC_RESOLUTION}) cho ${symbols.length} mã.`);
   });
 
-  ws.on('trade', (m) => console.log('TRADE', m.data));
-  ws.on('ohlc', (m) => console.log('OHLC ', m.data));
+  ws.on('trade', (m) => console.log('TRADE', m.data.symbol, m.data.matchPrice, 'x', m.data.matchQtty));
+  ws.on('ohlc', (m) => console.log('OHLC ', m.data.symbol, m.data.close, 'vol', m.data.volume));
 
   ws.on('reconnected', () => console.log('reconnected — đã re-subscribe'));
   ws.on('error', (err) => console.error('ws error:', err.message));

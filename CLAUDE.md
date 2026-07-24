@@ -116,9 +116,17 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 ## Điểm chưa chốt
 
 - REST + WS market data ĐÃ CHẠY LIVE OK (getAccounts/getInstruments/getOhlc,
-  WS auth_success + nhận ohlc). Trading writes (đặt lệnh) chưa test live (cần
-  trading-token/OTP). Payload WS vẫn `Record<string, unknown>` — chờ mẫu thật
-  để gõ schema.
+  WS ohlc/quote/trade/market_index). Trading writes (đặt lệnh) chưa test live
+  (cần trading-token/OTP).
+- Payload WS đã gõ kiểu ở `types/ws.ts`: `OhlcData`/`QuoteData`/`TradeData`/
+  `MarketIndexData` theo WIRE THẬT (lưu ý: trade dùng `matchPrice`/`matchQtty`,
+  `time` là object `{Seconds,Nanos}` = `WsTimestamp`, quote bid/offer =
+  `PriceLevel{price,qtty}`). secdef/order/position/account gõ theo models.py,
+  đánh dấu ⚠️ chưa verify wire. Mọi payload có `[key:string]:unknown` nên field
+  lạ không vỡ. Per-type event trả `MarketDataMessage<T>` đúng kiểu.
+- Board phái sinh: `subscribeTrade/Quote` cho mã phái sinh (vd VN30F1M) KHÔNG
+  về dữ liệu trên các board cổ phiếu mặc định (`DEFAULT_BOARDS`); ohlc thì OK.
+  Chưa tìm ra board đúng cho phái sinh — cần verify.
 - Encoding: chỉ JSON. Msgpack đã quyết **không làm** (JSON đủ) — đừng thêm lại
   trừ khi user yêu cầu.
 

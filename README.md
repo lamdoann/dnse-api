@@ -316,11 +316,14 @@ npm run lint
 - [x] `WebsocketClient` — realtime WS OpenAPI (HMAC, cùng key/secret)
 - [x] WS market data (ohlc/quote/trade/secdef/market_index)
 - [x] WS trading/tài khoản (orders/positions/account/order_event/position_event + bản broker.*)
+- [x] Verify live REST + WS market data với key thật (getAccounts/instruments/ohlc, WS ohlc/quote/trade/index)
+- [x] Typed payload WS: `ohlc`/`quote`/`trade`/`market_index` gõ kiểu từ wire thật; secdef/order/position/account theo SDK models (đánh dấu ⚠️ chưa verify wire)
 
 Chưa làm:
-- [ ] Decode payload WS có schema (typed message cho từng loại, thay vì `Record<string, unknown>`)
+- [ ] Verify wire cho các event chưa gõ chắc (secdef, order_event, position_event, account) — cần dữ liệu thật trong phiên có phát sinh
+- [ ] Board phái sinh cho `subscribeTrade/Quote` (mã phái sinh không về trên các board cổ phiếu mặc định)
 - [ ] Theo dõi rate-limit từ response header
-- [ ] Chạy verify live với API key thật (protocol đã đối chiếu SDK chính thức, chưa test thực tế)
+- [ ] Verify live phần đặt/sửa/hủy lệnh (cần trading-token qua OTP)
 
 > Encoding `msgpack`: đã cân nhắc, **không làm** — JSON đủ dùng.
 
