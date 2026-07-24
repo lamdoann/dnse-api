@@ -20,9 +20,8 @@ describe('signing string', () => {
     expect(s).toBe('(request-target): post /accounts/orders\ndate: D\nnonce: abc');
   });
 
-  it('reports signed headers list with and without nonce', () => {
+  it('has a constant signed-headers list (nonce not listed)', () => {
     expect(signedHeadersList()).toBe('(request-target) date');
-    expect(signedHeadersList('x')).toBe('(request-target) date nonce');
   });
 });
 
@@ -63,14 +62,18 @@ describe('RestClient dryRun', () => {
     expect(r.url).toBe('https://openapi.dnse.com.vn/accounts');
     expect(r.headers['x-api-key']).toBe('k');
     expect(r.headers['Date']).toBeDefined();
-    expect(r.headers['X-Signature']).toContain('keyId="k"');
+    // Draft-cavage value: `Signature ` scheme prefix, constant headers list,
+    // nonce inside the value (no separate Nonce header).
+    expect(r.headers['X-Signature']).toMatch(/^Signature keyId="k",/);
     expect(r.headers['X-Signature']).toContain('algorithm="hmac-sha256"');
+    expect(r.headers['X-Signature']).toContain('headers="(request-target) date"');
+    expect(r.headers['Nonce']).toBeUndefined();
   });
 
   it('signs market-data requests too (OpenAPI signs everything)', async () => {
     const r = (await client.getOhlc('DERIVATIVE', {
       symbol: 'VN30F1M',
-      resolution: 'D',
+      resolution: '1D',
       from: 1,
       to: 2,
     })) as DryRunResult;

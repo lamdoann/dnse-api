@@ -40,9 +40,13 @@ export function buildSigningString(
   return signingString;
 }
 
-/** List of signed headers, in order, for the `headers="..."` signature field. */
-export function signedHeadersList(nonce?: string): string {
-  return nonce ? '(request-target) date nonce' : '(request-target) date';
+/**
+ * The `headers="..."` list embedded in the signature value. Per the DNSE
+ * scheme this is a constant `(request-target) date` — the nonce is signed (it
+ * appears in the signing string) but is NOT listed here.
+ */
+export function signedHeadersList(): string {
+  return '(request-target) date';
 }
 
 /**

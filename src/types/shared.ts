@@ -25,7 +25,10 @@ export type OrderType = 'LO' | 'MP' | 'ATO' | 'ATC' | 'MOK' | 'MAK' | 'PLO';
 /** OTP delivery / verification channel used when minting a trading token. */
 export type OtpType = 'email' | 'smart';
 
-/** Candle resolution for OHLC queries (minutes, or `D`/`W`/`M`). */
+/**
+ * Candle resolution for OHLC queries. Minutes as `'1'..'60'`, and day/week/
+ * month as `'1D'`/`'1W'`/`'1M'` (verified live — plain `'D'` returns no data).
+ */
 export type OhlcResolution =
   | '1'
   | '3'
@@ -33,6 +36,6 @@ export type OhlcResolution =
   | '15'
   | '30'
   | '60'
-  | 'D'
-  | 'W'
-  | 'M';
+  | '1D'
+  | '1W'
+  | '1M';

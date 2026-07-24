@@ -27,7 +27,7 @@ async function main() {
   // market = 'DERIVATIVE' cho hợp đồng tương lai; resolution '1D' = nến ngày.
   const ohlc = (await client.getOhlc('DERIVATIVE', {
     symbol: SYMBOL,
-    resolution: 'D',
+    resolution: '1D',
     from,
     to: now,
   })) as OhlcResponse;

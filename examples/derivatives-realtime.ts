@@ -16,21 +16,24 @@ import { RestClient, WebsocketClient, Instrument } from '../src';
 
 const OHLC_RESOLUTION = '1'; // nến 1 phút
 
-/** Heuristic nhận biết mã phái sinh (futures) từ 1 instrument. */
+/**
+ * Nhận biết mã phái sinh: thị trường phái sinh DNSE là `marketId: "DVX"`,
+ * nhóm chứng khoán `securityGroupId: "FU"` (futures).
+ */
 function isDerivative(inst: Instrument): boolean {
-  const group = String(inst.securityGroupId ?? '').toUpperCase();
-  const type = String(inst.securityType ?? '').toUpperCase();
-  // KRX/DNSE thường dùng "FU" (futures) cho phái sinh.
-  if (group === 'FU' || type.includes('FUTURE')) return true;
-  // Fallback theo pattern mã: VN30F1M / VN30F2508 / GB05F… (…F + số).
-  return /F(\d{2,}|1M|2M|1Q|2Q)$/.test(inst.symbol);
+  return inst.marketId === 'DVX' || inst.securityGroupId === 'FU';
 }
 
-/** Chuẩn hóa response /instruments về mảng Instrument (có thể bị wrap). */
+/** Chuẩn hóa response `GET /instruments` (`{ data: [...] }`) về mảng. */
 function toInstrumentList(res: unknown): Instrument[] {
   if (Array.isArray(res)) return res as Instrument[];
-  const wrapped = res as { instruments?: Instrument[] };
-  return wrapped.instruments ?? [];
+  const wrapped = res as { data?: Instrument[] };
+  return wrapped.data ?? [];
+}
+
+/** Mã dùng để subscribe / lấy giá là ticker quen thuộc (symbolType), vd VN30F1M. */
+function tradingSymbol(inst: Instrument): string {
+  return inst.symbolType || inst.symbol;
 }
 
 async function main() {
@@ -43,7 +46,7 @@ async function main() {
   const res = await rest.getInstruments({ limit: 1000 });
   const all = toInstrumentList(res);
   const derivatives = all.filter(isDerivative);
-  const symbols = derivatives.map((d) => d.symbol);
+  const symbols = derivatives.map(tradingSymbol);
 
   if (symbols.length === 0) {
     console.error(

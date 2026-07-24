@@ -72,14 +72,25 @@ src/
 
 ## Cách ký request (HMAC — draft-cavage)
 
-Signing string cho request private:
+Signing string cho request private (ĐÃ VERIFY LIVE):
 ```
-(request-target): <method> <path?query>
+(request-target): <method> <path>      # PATH ONLY — KHÔNG kèm query string!
 date: <RFC-1123 date>
-nonce: <nonce>            # nếu hmacNonceEnabled (mặc định true)
+nonce: <nonce>                          # nếu hmacNonceEnabled (mặc định true)
 ```
-→ HMAC-SHA256(secret, string) → base64 → URL-encode. Gắn header `Date`,
-`x-api-key`, `X-Signature` (keyId/algorithm/headers/nonce/signature), `Nonce`.
+→ HMAC-SHA256(secret, string) → base64 → URL-encode.
+
+Gắn header:
+- `Date`, `x-api-key`
+- `X-Signature: Signature keyId="..",algorithm="..",headers="(request-target) date",signature=".."[,nonce=".."]`
+
+Các điểm SỐNG CHẾT (sai là `400 OA-400 Authorization field missing/malformed`):
+- Giá trị `X-Signature` phải có tiền tố **`Signature `** (có dấu cách).
+- `headers="(request-target) date"` **luôn cố định** (nonce KHÔNG nằm trong list
+  này, dù nonce có trong signing string).
+- **KHÔNG** gửi header `Nonce` riêng; nonce chỉ nằm cuối giá trị `X-Signature`.
+- Request-target ký **chỉ path, bỏ query** (query vẫn gửi trong URL thật).
+
 Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 
 ## Quy ước & cách mở rộng
@@ -104,9 +115,10 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 
 ## Điểm chưa chốt
 
-- Protocol WS đã verify theo SDK Python chính thức (`dnse-tech/openapi-sdk`,
-  thư mục `python/dnse/websocket/` + `python/websocket-marketdata|trading/`).
-  Chưa chạy live với key thật.
+- REST + WS market data ĐÃ CHẠY LIVE OK (getAccounts/getInstruments/getOhlc,
+  WS auth_success + nhận ohlc). Trading writes (đặt lệnh) chưa test live (cần
+  trading-token/OTP). Payload WS vẫn `Record<string, unknown>` — chờ mẫu thật
+  để gõ schema.
 - Encoding: chỉ JSON. Msgpack đã quyết **không làm** (JSON đủ) — đừng thêm lại
   trừ khi user yêu cầu.
 
@@ -115,9 +127,11 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
 - REST: đầy đủ endpoint theo SDK gốc (accounts, balances, loan packages, ppse,
   positions, orders read/write, history, corporate actions, instruments, OHLC,
   secdef, OTP → trading token). `getInstruments` = `GET /instruments` (query:
-  symbol/marketId/securityGroupId/indexName/limit/page) — dùng để liệt kê mã;
-  DNSE không có enum public cho "phái sinh" nên lọc client-side (xem
-  `examples/derivatives-realtime.ts`).
+  symbol/marketId/securityGroupId/indexName/limit/page), trả `{ data: [...] }`.
+  Instrument: `symbol` = mã KRX (vd `41I1G8000`), `symbolType` = ticker quen
+  thuộc (vd `VN30F1M`, dùng cái này cho OHLC/WS). Phái sinh = `marketId "DVX"`
+  hoặc `securityGroupId "FU"` (xem `examples/derivatives-realtime.ts`).
+- OHLC: resolution ngày là **`1D`** (không phải `D`), phút là `1/3/5/15/30/60`.
 - WS: `WebsocketClient` thuần OpenAPI (ws + HMAC handshake) — market data
   (ohlc/quote/trade/secdef/market_index) + trading/tài khoản (orders/positions/
   account/order_event/position_event, có bản broker.*). Có test.

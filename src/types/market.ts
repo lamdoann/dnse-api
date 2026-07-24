@@ -21,23 +21,32 @@ export interface GetInstrumentsParams {
   page?: number;
 }
 
-/** A tradable instrument as returned by `GET /instruments`. */
+/**
+ * A tradable instrument as returned by `GET /instruments`.
+ *
+ * NOTE (verified live): `symbol` is the raw KRX code (e.g. `41I1G8000`) while
+ * `symbolType` is the familiar trading ticker (e.g. `VN30F1M`). Derivatives
+ * have `marketId: "DVX"` and `securityGroupId: "FU"`.
+ */
 export interface Instrument {
+  /** Raw KRX security code, e.g. `41I1G8000`. */
   symbol: string;
+  /** Familiar ticker, e.g. `VN30F1M` — use this for price/OHLC & WS subscribe. */
+  symbolType?: string;
   name?: string;
+  shortName?: string;
+  /** Market id, e.g. `DVX` for derivatives. */
   marketId?: string;
+  /** Security group, e.g. `FU` (futures), `STO` (stock). */
   securityGroupId?: string;
-  securityType?: string;
-  exchange?: string;
+  indexName?: string | null;
+  listedDate?: string;
   [key: string]: unknown;
 }
 
-/** Response of `GET /instruments` (array, possibly wrapped + paginated). */
+/** Response of `GET /instruments` — instruments are under `data`. */
 export interface InstrumentsResponse {
-  instruments?: Instrument[];
-  total?: number;
-  page?: number;
-  limit?: number;
+  data?: Instrument[];
   [key: string]: unknown;
 }
 

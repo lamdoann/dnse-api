@@ -133,22 +133,27 @@ export abstract class BaseRestClient {
 
       const date = formatDateHeader();
       const nonce = this.nonceEnabled ? generateNonce() : undefined;
-      const signingString = buildSigningString(method, pathWithQuery, date, nonce);
+      // DNSE signs the request-target with the PATH ONLY (no query string);
+      // the query is still sent on the wire, just not part of the signature.
+      const signPath = pathWithQuery.split('?')[0];
+      const signingString = buildSigningString(method, signPath, date, nonce);
       const signature = signMessage(this.credentials.apiSecret, signingString, this.algorithm);
 
-      const sigFields = [
-        `keyId="${this.credentials.apiKey}"`,
-        `algorithm="${this.algorithm}"`,
-        `headers="${signedHeadersList(nonce)}"`,
-      ];
+      // Draft-cavage HTTP-signature value, with the `Signature ` scheme prefix.
+      // The `headers` list is always `(request-target) date` (constant); the
+      // nonce lives only inside this value (no separate Nonce header) and is
+      // appended AFTER `signature`.
+      let sigValue =
+        `Signature keyId="${this.credentials.apiKey}",` +
+        `algorithm="${this.algorithm}",` +
+        `headers="${signedHeadersList()}",` +
+        `signature="${signature}"`;
       if (nonce) {
-        sigFields.push(`nonce="${nonce}"`);
-        headers['Nonce'] = nonce;
+        sigValue += `,nonce="${nonce}"`;
       }
-      sigFields.push(`signature="${signature}"`);
 
       headers['Date'] = date;
-      headers['X-Signature'] = sigFields.join(',');
+      headers['X-Signature'] = sigValue;
       headers['x-api-key'] = this.credentials.apiKey;
     }
 
