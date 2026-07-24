@@ -306,15 +306,24 @@ export class RestClient extends BaseRestClient {
   }
 
   /**
-   * OHLC candles (TradingView-style parallel arrays).
+   * OHLC candles (TradingView-style parallel arrays). A `turnover` array
+   * (`v[i] * c[i]`, giá trị giao dịch) is computed client-side and added.
    * Requires API key/secret — the OpenAPI gateway signs all requests.
    * @param market `STOCK`, `DERIVATIVE` or `INDEX`.
    */
-  getOhlc(market: OhlcMarket, params: GetOhlcParams, options?: RequestOptions) {
-    return this.getPrivate<OhlcResponse | DryRunResult>(
+  async getOhlc(
+    market: OhlcMarket,
+    params: GetOhlcParams,
+    options?: RequestOptions,
+  ): Promise<OhlcResponse | DryRunResult> {
+    const res = await this.getPrivate<OhlcResponse | DryRunResult>(
       '/price/ohlc',
       { type: market, ...params },
       options,
     );
+    if (res && !('dryRun' in res) && Array.isArray(res.c) && Array.isArray(res.v)) {
+      res.turnover = res.c.map((close, i) => close * (res.v[i] ?? 0));
+    }
+    return res;
   }
 }

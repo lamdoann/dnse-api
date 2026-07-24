@@ -110,6 +110,11 @@ export interface OhlcData extends WsPayloadBase {
   low: number;
   close: number;
   volume: number;
+  /**
+   * Turnover (giá trị giao dịch) — computed client-side as `volume * close`.
+   * Not sent by DNSE; added by {@link WebsocketClient} on each ohlc frame.
+   */
+  turnover?: number;
   /** Candle open time — epoch seconds (a plain number for ohlc). */
   time: number;
   lastUpdated?: number;

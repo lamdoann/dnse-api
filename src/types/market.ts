@@ -85,6 +85,11 @@ export interface OhlcResponse {
   l: number[];
   c: number[];
   v: number[];
+  /**
+   * Turnover (giá trị giao dịch) per candle — computed client-side as
+   * `v[i] * c[i]` (volume × close). Not sent by DNSE; added by `getOhlc`.
+   */
+  turnover?: number[];
   [key: string]: unknown;
 }
 
