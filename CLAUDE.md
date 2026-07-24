@@ -148,6 +148,10 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
   đồng (VN30F ×100,000đ/điểm). Từng cân nhắc thêm field `turnover` nhưng đã BỎ
   vì volume×price không ra VND thẳng (đơn vị khác nhau theo instrument) → dễ
   hiểu nhầm. Đừng tự thêm lại trừ khi có quy đổi đơn vị rõ ràng.
+- Message `trade` có sẵn `grossTradeAmount` = tổng giá trị giao dịch **lũy kế**
+  trong phiên, đơn vị **tỷ VND** (verify live: HPG 0.31 = 0.313 tỷ; VN30F1M
+  19,660 = notional 19,717 tỷ, đã tính multiplier 100,000). Lũy kế nên muốn giá
+  trị 1 khoảng thì lấy hiệu. Dùng cái này thay vì tự tính turnover.
 - WS: `WebsocketClient` thuần OpenAPI (ws + HMAC handshake) — market data
   (ohlc/quote/trade/secdef/market_index) + trading/tài khoản (orders/positions/
   account/order_event/position_event, có bản broker.*). Có test.
