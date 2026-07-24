@@ -279,6 +279,27 @@ src/
 
 Muốn thêm endpoint mới: thêm 1 method vào `RestClient` gọi `getPrivate/postPrivate/...` với path tương ứng, và khai báo type ở `src/types`.
 
+## Chạy ví dụ
+
+1. Tạo file `.env` (copy từ `.env.example`) và điền `DNSE_API_KEY` / `DNSE_API_SECRET`:
+
+   ```bash
+   cp .env.example .env
+   # rồi sửa .env, điền key/secret thật (.env đã được gitignore)
+   ```
+
+2. Chạy example qua npm script (tự nạp `.env`, chạy TS bằng `tsx`):
+
+   ```bash
+   npm run example:ohlc          # nến ngày VN30F1M (phái sinh)
+   npm run example:account       # tài khoản, số dư, vị thế, sổ lệnh
+   npm run example:derivatives   # fetch mã phái sinh -> subscribe trade + ohlc realtime
+   npm run example:market-data   # WS market data (ohlc/quote/trade/index)
+   npm run example:trading       # WS trading/tài khoản (orders/positions/account)
+   ```
+
+   Chạy file bất kỳ: `npm run example -- examples/rest-public.ts`
+
 ## Phát triển
 
 ```bash

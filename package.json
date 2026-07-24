@@ -19,6 +19,12 @@
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
     "test": "jest",
+    "example": "node --env-file=.env --import tsx",
+    "example:ohlc": "node --env-file=.env --import tsx examples/rest-ohlc-vn30-futures.ts",
+    "example:account": "node --env-file=.env --import tsx examples/rest-account.ts",
+    "example:market-data": "node --env-file=.env --import tsx examples/ws-market-data.ts",
+    "example:trading": "node --env-file=.env --import tsx examples/ws-trading.ts",
+    "example:derivatives": "node --env-file=.env --import tsx examples/derivatives-realtime.ts",
     "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
@@ -57,6 +63,7 @@
     "@types/ws": "^8.18.1",
     "rimraf": "^5.0.0",
     "ts-jest": "^29.1.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.4.0"
   }
 }
