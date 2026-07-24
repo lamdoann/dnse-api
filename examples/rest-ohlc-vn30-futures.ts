@@ -45,7 +45,6 @@ async function main() {
     low: ohlc.l[i],
     close: ohlc.c[i],
     volume: ohlc.v[i],
-    turnover: ohlc.turnover?.[i], // = volume * close
   }));
 
   console.log(`Nến ngày ${SYMBOL} (${candles.length} phiên):`);

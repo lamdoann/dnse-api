@@ -22,9 +22,7 @@ async function main() {
   });
 
   // Payload đã gõ kiểu theo từng loại (autocomplete + kiểm tra field khi compile):
-  ws.on('ohlc', (m) =>
-    console.log('OHLC ', m.data.symbol, m.data.close, 'vol', m.data.volume, 'turnover', m.data.turnover),
-  );
+  ws.on('ohlc', (m) => console.log('OHLC ', m.data.symbol, m.data.close, 'vol', m.data.volume));
   ws.on('quote', (m) =>
     console.log('QUOTE', m.data.symbol, 'bid', m.data.bid[0]?.price, 'ask', m.data.offer[0]?.price),
   );

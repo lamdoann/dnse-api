@@ -143,10 +143,11 @@ Toàn bộ ở `util/node-support.ts` + `util/BaseRestClient.ts`.
   thuộc (vd `VN30F1M`, dùng cái này cho OHLC/WS). Phái sinh = `marketId "DVX"`
   hoặc `securityGroupId "FU"` (xem `examples/derivatives-realtime.ts`).
 - OHLC: resolution ngày là **`1D`** (không phải `D`), phút là `1/3/5/15/30/60`.
-  Có thêm field `turnover` (giá trị giao dịch) tính CLIENT-SIDE =
-  `volume * (high+low+close)/3` (typical price; DNSE không trả sẵn): REST →
-  mảng `turnover[]` trong `getOhlc`; WS → field `turnover` trên mỗi frame
-  `ohlc`/`ohlc_closed`.
+  LƯU Ý ĐƠN VỊ: `price` cổ phiếu tính bằng **nghìn VND** (HPG 20.65 = 20,650đ),
+  volume = số cổ phiếu; phái sinh `price` là **điểm chỉ số**, volume = số hợp
+  đồng (VN30F ×100,000đ/điểm). Từng cân nhắc thêm field `turnover` nhưng đã BỎ
+  vì volume×price không ra VND thẳng (đơn vị khác nhau theo instrument) → dễ
+  hiểu nhầm. Đừng tự thêm lại trừ khi có quy đổi đơn vị rõ ràng.
 - WS: `WebsocketClient` thuần OpenAPI (ws + HMAC handshake) — market data
   (ohlc/quote/trade/secdef/market_index) + trading/tài khoản (orders/positions/
   account/order_event/position_event, có bản broker.*). Có test.
